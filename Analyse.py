@@ -6,15 +6,15 @@ import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 # sklearn models
-from sklearn import preprocessing, linear_model, svm, neural_network, ensemble
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.pipeline import make_pipeline, Pipeline
-from sklearn.model_selection import cross_val_score
+from sklearn import preprocessing, linear_model, svm, neural_network, ensemble
 
 
 # display setting
 pd.set_option('expand_frame_repr', False)
 
-# Data specific paramerters
+# Data specific parameters
 numTimeCols = 5
 
 
@@ -54,20 +54,22 @@ def closePlot(event):
         plt.close(event.canvas.figure)
 
 
-def plot(col_name, df, typ='o'):
+def plot(col_names, df, typ='o'):
     '''
     Plot a column of dataframe, given the flag is valid, i.e. not 99
     '''
     # check col_name is not time
-    if col_name in ['Year', 'Month', 'Day', 'Hour', 'Minute']:
-        return
+    for col_name in col_names:
+        if col_name in ['Year', 'Month', 'Day', 'Hour', 'Minute']:
+            return
 
-    index = df.columns.get_loc(col_name)
-    col_flags = df.columns[index + 1]
-    Y = df[col_name][df[col_flags] < 99]
+        index = df.columns.get_loc(col_name)
+        col_flags = df.columns[index + 1]
+        Y = df[col_name][df[col_flags] < 99]
 
-    plt.plot(Y, typ, label=col_name, markersize=1)
-    plt.title('{} vs Time, {}/{}/{} - {}/{}/{}'.format(col_name,
+        plt.plot(Y, typ, label=col_name, markersize=1)
+
+    plt.title('{} vs Time, {}/{}/{} - {}/{}/{}'.format(col_names,
                                                        df['Day'].iloc[0],
                                                        df['Month'].iloc[0],
                                                        df['Year'].iloc[0],
@@ -121,47 +123,85 @@ def readData(data_dir, years="", start_month=0, num_months=0):
     return dfs, measure_cols, flag_cols
 
 
-def cleanupDf(df, measure_cols=['GlobalHorizIrr(PSP)', 'DirNormIrr', 'DiffuseHorizIrr'],
-                  flag_cols=['GHIFlag', 'DNIFlag', 'DHIFlag']):
+def cleanupDf(df, measure_cols=[
+        'GlobalHorizIrr(PSP)',
+        'DirNormIrr',
+        'DiffuseHorizIrr'],
+        flag_cols=['GHIFlag', 'DNIFlag', 'DHIFlag']):
     '''
     Remove entries with invalid flags and invalid columns
     '''
-    # replace all 99s and -99999.0 with NaN
+    # remove negative measures
+    numbers = df._get_numeric_data()
+    numbers[numbers < 0] = np.nan
+
+    # replace all -ves, 99 flags and -99999.0 with NaN
     for measure, flag in zip(measure_cols, flag_cols):
         df[flag].replace(99, np.nan, inplace=True)
         df.loc[df[flag].isnull(), measure] = np.nan
 
-    # remove invalid columns - all NaNs
+    # remove invalid rows/columns - all NaNs
+    df.dropna(axis=0, how='all', subset=measure_cols, inplace=True)
     df.dropna(axis=1, how='all', inplace=True)
 
 
-def averageDf(df, col, 
-    possible_cols=['Year', 'Month', 'Day', 'Hour', 'Minute',]):
+def aggregateDf(df, col, operation='avg',
+                possible_cols=['Year', 'Month', 'Day', 'Hour', 'Minute']):
     '''
-    Groups all the observations of df by the cols, and averages over that time span
+    Groups all the observations of df by the cols, and aggregates over that time span
     '''
     if not(col in possible_cols):
-        print 'Cant take average on this column'
+        print 'Cant take aggregate on this column'
         return df, possible_cols
 
     cols = possible_cols[:possible_cols.index(col) + 1]
-    df = df.groupby(cols).mean().reset_index()
+    if operation == 'avg':
+        df = df.groupby(cols).mean().reset_index()
+    elif operation == 'sum':
+        df = df.groupby(cols).sum().reset_index()
+
+    # remove columns of smaller time values
     for col in possible_cols:
         if not(col in cols):
-            df.drop(col, axis = 1, inplace=True)
+            df.drop(col, axis=1, inplace=True)
+
     return df, cols
 
 
-# def createDataSets(df, input_measure_cols=['GlobalHorizIrr(PSP)'],
-#                        input_flag_cols=['GHIFlag'],
-#                        output_measure_cols=['GlobalHorizIrr(PSP)'],
-#                        window=100):
-#     '''
-#     Create Training and Testing Sets
-#     '''
+def createDataSets(df, input_measure_cols=['GlobalHorizIrr(PSP)'],
+                   input_flag_cols=['GHIFlag'],
+                   output_measure_cols=['GlobalHorizIrr(PSP)'],
+                   window=7, split_factor=0.1):
+    '''
+    Create Data set and split into train/test
+    '''
+    Input, Output = [], []
+    for index, row in df.iterrows():
+        final = index + window
+        if final < len(df):
+            Input.append(df[input_measure_cols].iloc[index:final])
+            Output.append(df[output_measure_cols].iloc[final])
+        else:
+            break
+
+    # create training and testing sets
+    t_in, test_in, t_out, test_out = train_test_split(
+        Input, Output, test_size=split_factor)
+    train_in, val_in, train_out, val_out = train_test_split(
+        t_in, t_out, test_size=split_factor)
+
+    # print information
+    print 'Input  : Past {} days\' {}\nOutput : Current {}'.format(
+        window, input_measure_cols, output_measure_cols)
+    print 'Constructed {} samples from {} observations'.format(len(Input), len(df))
+    print 'Training samples   : {}'.format(len(train_in))
+    print 'Validation samples : {}'.format(len(val_in))
+    print 'Testing samples    : {}'.format(len(test_in))
+
+    return train_in, train_out, val_in, val_out, test_in, test_out
 
 
-# def crossValidate(df, model, n_fold, 
+# def crossValidate(df, model, n_fold,
 # 	cols_to_use=['GlobalHorizIrr(PSP)', 'GHIFlag',
 # 				 'DirNormIrr', 'DNIFlag',
 # 				 'DiffuseHorizIrr', 'DHIFlag'],
@@ -186,15 +226,19 @@ def Run(args):
     Data = pd.concat(dfs).reset_index(drop=True)
     measure_cols = ['GlobalHorizIrr(PSP)', 'DirNormIrr']
 
-    # take daily average
-    Data_avg, time_cols = averageDf(Data, 'Day')
+    # take sum on a given time scale
+    Data_sum, time_cols = aggregateDf(Data, 'Day', 'sum')
 
     # get correlation between the measure columns
     print 'Correlation in {}'.format(measure_cols)
-    print Data[measure_cols].corr()
+    print Data_sum[measure_cols].corr()
 
-    # print Data_avg
-    plot(measure_cols[1], Data_avg, '-')
+    # plot Data
+    # plot(measure_cols, Data_sum, '-')
+
+    # create data set
+    train_in, train_out, val_in, val_out, test_in, test_out = createDataSets(
+        Data_sum)
 
 
 if __name__ == '__main__':
