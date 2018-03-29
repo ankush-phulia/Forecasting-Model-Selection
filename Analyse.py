@@ -23,8 +23,11 @@ def getParser():
         description='Analyse Time Series Data')
     parser.add_argument(
         '--data_dir',
-        required=True,
         help='Directory with csv data files')
+    parser.add_argument(
+        '--data',
+        default="",
+        help='One csv file with all the data')
     parser.add_argument(
         '--years',
         nargs='*',
@@ -61,52 +64,55 @@ def plot(col_names, df, typ='o'):
     '''
     # check col_name is not time
     for col_name in col_names:
-        if col_name in ['Year', 'Month', 'Day', 'Hour', 'Minute']:
-            return
+        if col_name not in df.columns:
+            continue
 
         Y = df[col_name]
         plt.plot(Y, typ, label=col_name, markersize=1)
 
-    plt.title('{}/{}/{} - {}/{}/{}'.format(df['Day'].iloc[0],
-                                           df['Month'].iloc[0],
-                                           df['Year'].iloc[0],
-                                           df['Day'].iloc[-1],
-                                           df['Month'].iloc[-1],
-                                           df['Year'].iloc[-1]))
-    plt.legend(loc='upper right')
+    plt.title('{} - {}'.format(
+        df.index[0].strftime('%d/%m/%Y'), df.index[-1].strftime('%d/%m/%Y')))
+    plt.legend(loc='upper left')
     plt.show()
 
 
-def readData(data_dir, years="", start_month=0, num_months=0):
+def expandRange(data):
+    '''
+    Expects a string list of ranges/values - which are ints actually
+    Expands the strings which have '-' in them, to all values between them
+    '''
+    expanded = []
+    for data_item in data:
+        if '-' in data_item:
+            [start, end] = data_item.split('-')
+            expanded += [str(i) for i in xrange(int(start), int(end) + 1)]
+        else:
+            expanded.append(data_item)
+    return expanded
+
+
+def readData(data_dir, data="", years="", start_month=0, num_months=0):
     '''
     Read data from CSV files into DataFrame
     '''
-    # Data Formatting - allow specification of year ranges
-    expanded_years = []
-    for year in years:
-        if '-' in year:
-            [start_yr, end_yr] = year.split('-')
-            expanded_years += [str(i) for i in xrange(int(start_yr), int(end_yr) + 1)]
-        else:
-            expanded_years.append(year)
-    years = expanded_years
-    years.sort()
+    # relevant column names for the site BS
+    cols = ['Timestamp',
+            'GlobalHorizIrr(PSP)', 'GHIFlag',
+            'DirNormIrr', 'DNIFlag',
+            'DiffuseHorizIrr', 'DHIFlag']
+    measure_cols = [cols[i] for i in xrange(1, len(cols), 2)]
+    flag_cols = [cols[i] for i in xrange(2, len(cols), 2)]
 
+    # data is already in a file processed before
+    if len(data):
+        df = pd.read_csv(data, index_col=0)
+        df.index = pd.to_datetime(df.index)
+        return [df], measure_cols, flag_cols
+
+    # Data Formatting - allow specification of year ranges
+    years = sorted(expandRange(years))
     start_month = max(0, start_month)
     start_month = min(start_month, 12)
-
-    # relevant column names for the site BS
-    cols = [
-        'Year',
-        'Month',
-        'Day',
-        'Hour',
-        'Minute',
-        'GlobalHorizIrr(PSP)', 'GHIFlag',
-        'DirNormIrr', 'DNIFlag',
-        'DiffuseHorizIrr', 'DHIFlag']
-    measure_cols = ['GlobalHorizIrr(PSP)', 'DirNormIrr', 'DiffuseHorizIrr']
-    flag_cols = ['GHIFlag', 'DNIFlag', 'DHIFlag']
 
     first_month_found = (len(years) == 0 or start_month == 0)
     dfs = []
@@ -122,10 +128,15 @@ def readData(data_dir, years="", start_month=0, num_months=0):
 
             if first_month_found and (not(len(years)) or f[2:6] in years):
                 # make dataframe out of csv and append it
-                dfs.append(
-                    pd.read_csv(
+                df = pd.read_csv(
                         os.path.join(data_dir, f),
-                        usecols=range(len(cols)), header=None, names=cols))
+                        usecols=range(numTimeCols + len(measure_cols) * 2),
+                        header=None, parse_dates=[[0, 1, 2, 3, 4]])
+                # rename columns and set index to time
+                df.columns = cols
+                df.set_index('Timestamp', inplace=True)
+                df.index = pd.to_datetime(df.index, format='%Y %m %d %H %M')
+                dfs.append(df)
 
     return dfs, measure_cols, flag_cols
 
@@ -147,13 +158,13 @@ def cleanupDf(df, measure_cols=[
         df[flag].replace(99, np.nan, inplace=True)
         df.loc[df[flag].isnull(), measure] = np.nan
 
-    # remove invalid rows/columns - all NaNs
+    # remove invalid rows - all NaNs
     df.dropna(axis=0, how='all', subset=measure_cols, inplace=True)
-    df.dropna(axis=1, how='all', inplace=True)
+    # df.dropna(axis=1, how='all', inplace=True)
 
 
 def aggregateDf(df, col, operation='avg',
-                possible_cols=['Year', 'Month', 'Day', 'Hour', 'Minute']):
+                possible_cols=['Y', 'M', 'D', 'h', 'm']):
     '''
     Groups all the observations of df by the cols, and aggregates over that time span
     '''
@@ -161,18 +172,12 @@ def aggregateDf(df, col, operation='avg',
         print 'Cant take aggregate on this column'
         return df, possible_cols
 
-    cols = possible_cols[:possible_cols.index(col) + 1]
     if operation == 'avg':
-        df = df.groupby(cols).mean().reset_index()
+        df = df.resample(col).mean()
     elif operation == 'sum':
-        df = df.groupby(cols).sum().reset_index()
+        df = df.resample(col).sum()
 
-    # remove columns of smaller time values
-    for col in possible_cols:
-        if not(col in cols):
-            df.drop(col, axis=1, inplace=True)
-
-    return df, cols
+    return df
 
 
 def createDataSets(df, input_measure_cols=['GlobalHorizIrr(PSP)'],
@@ -183,13 +188,10 @@ def createDataSets(df, input_measure_cols=['GlobalHorizIrr(PSP)'],
     Create Data set and split into train/test
     '''
     Input, Output = [], []
-    for index, row in df.iterrows():
+    for index in xrange(0, df.shape[0] - window - 1):
         final = index + window
-        if final < len(df):
-            Input.append(df[input_measure_cols].iloc[index:final])
-            Output.append(df[output_measure_cols].iloc[final])
-        else:
-            break
+        Input.append(df[input_measure_cols].iloc[index:final])
+        Output.append(df[output_measure_cols].iloc[final])
 
     # create training and testing sets
     t_in, test_in, t_out, test_out = train_test_split(
@@ -224,22 +226,22 @@ def Run(args):
 
     # read data to make list of dataframes
     dfs, measure_cols, flag_cols = readData(
-        args['data_dir'], args['years'], args['start_month'], args['num_months'])
+        args['data_dir'], args['data'], args['years'], args['start_month'], args['num_months'])
 
     # clean-up for each one
     for df in dfs:
         cleanupDf(df, measure_cols, flag_cols)
 
     # put them all together
-    Data = pd.concat(dfs).reset_index(drop=True)
+    Data = pd.concat(dfs)
     measure_cols = ['GlobalHorizIrr(PSP)', 'DirNormIrr', 'DiffuseHorizIrr']
 
     # take sum on a given time scale
-    Data_sum, time_cols = aggregateDf(Data, 'Day', 'sum')
-
+    Data_sum = aggregateDf(Data, 'D', 'sum')
+    
     # get correlation between the measure columns
     print 'Correlation in {}'.format(measure_cols)
-    print Data_sum[measure_cols].corr()
+    print Data_sum[measure_cols].corr(), '\n'
 
     # plot Data
     plot(measure_cols, Data_sum, '-')
@@ -247,6 +249,7 @@ def Run(args):
     # create data set
     train_in, train_out, val_in, val_out, test_in, test_out = createDataSets(
         Data_sum)
+    print train_in
 
 
 if __name__ == '__main__':
