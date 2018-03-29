@@ -29,7 +29,8 @@ def getParser():
         '--years',
         nargs='*',
         default=[],
-        help='Which years to analyse for, space separated')
+        help='Which years to analyse for, space separated.\
+        Use y1-y2 to specify all years between and including y1 and y2')
     parser.add_argument(
         '--start_month',
         type=int,
@@ -63,19 +64,15 @@ def plot(col_names, df, typ='o'):
         if col_name in ['Year', 'Month', 'Day', 'Hour', 'Minute']:
             return
 
-        index = df.columns.get_loc(col_name)
-        col_flags = df.columns[index + 1]
-        Y = df[col_name][df[col_flags] < 99]
-
+        Y = df[col_name]
         plt.plot(Y, typ, label=col_name, markersize=1)
 
-    plt.title('{} vs Time, {}/{}/{} - {}/{}/{}'.format(col_names,
-                                                       df['Day'].iloc[0],
-                                                       df['Month'].iloc[0],
-                                                       df['Year'].iloc[0],
-                                                       df['Day'].iloc[-1],
-                                                       df['Month'].iloc[-1],
-                                                       df['Year'].iloc[-1]))
+    plt.title('{}/{}/{} - {}/{}/{}'.format(df['Day'].iloc[0],
+                                           df['Month'].iloc[0],
+                                           df['Year'].iloc[0],
+                                           df['Day'].iloc[-1],
+                                           df['Month'].iloc[-1],
+                                           df['Year'].iloc[-1]))
     plt.legend(loc='upper right')
     plt.show()
 
@@ -84,10 +81,20 @@ def readData(data_dir, years="", start_month=0, num_months=0):
     '''
     Read data from CSV files into DataFrame
     '''
-    # Data Formatting
+    # Data Formatting - allow specification of year ranges
+    expanded_years = []
+    for year in years:
+        if '-' in year:
+            [start_yr, end_yr] = year.split('-')
+            expanded_years += [str(i) for i in xrange(int(start_yr), int(end_yr) + 1)]
+        else:
+            expanded_years.append(year)
+    years = expanded_years
     years.sort()
+
     start_month = max(0, start_month)
     start_month = min(start_month, 12)
+
     # relevant column names for the site BS
     cols = [
         'Year',
@@ -193,7 +200,8 @@ def createDataSets(df, input_measure_cols=['GlobalHorizIrr(PSP)'],
     # print information
     print 'Input  : Past {} days\' {}\nOutput : Current {}'.format(
         window, input_measure_cols, output_measure_cols)
-    print 'Constructed {} samples from {} observations'.format(len(Input), len(df))
+    print 'Constructed {} samples from {} observations'.format(
+        len(Input), len(df))
     print 'Training samples   : {}'.format(len(train_in))
     print 'Validation samples : {}'.format(len(val_in))
     print 'Testing samples    : {}'.format(len(test_in))
@@ -224,7 +232,7 @@ def Run(args):
 
     # put them all together
     Data = pd.concat(dfs).reset_index(drop=True)
-    measure_cols = ['GlobalHorizIrr(PSP)', 'DirNormIrr']
+    measure_cols = ['GlobalHorizIrr(PSP)', 'DirNormIrr', 'DiffuseHorizIrr']
 
     # take sum on a given time scale
     Data_sum, time_cols = aggregateDf(Data, 'Day', 'sum')
@@ -234,7 +242,7 @@ def Run(args):
     print Data_sum[measure_cols].corr()
 
     # plot Data
-    # plot(measure_cols, Data_sum, '-')
+    plot(measure_cols, Data_sum, '-')
 
     # create data set
     train_in, train_out, val_in, val_out, test_in, test_out = createDataSets(
