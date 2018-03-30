@@ -5,10 +5,12 @@ import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+# statistical models
+from statsmodels.tsa import arima_model
 # sklearn models
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.pipeline import make_pipeline, Pipeline
-from sklearn import preprocessing, linear_model, svm, neural_network, ensemble
+# from sklearn.pipeline import make_pipeline, Pipeline
+# from sklearn import preprocessing, linear_model, svm, neural_network, ensemble
 
 
 # display setting
@@ -58,7 +60,7 @@ def closePlot(event):
         plt.close(event.canvas.figure)
 
 
-def plot(col_names, df, typ='o'):
+def plot(col_names, df, typ='o', autocorr=True, combined=True):
     '''
     Plot a column of dataframe, given the flag is valid, i.e. not 99
     '''
@@ -66,14 +68,26 @@ def plot(col_names, df, typ='o'):
     for col_name in col_names:
         if col_name not in df.columns:
             continue
-
         Y = df[col_name]
         plt.plot(Y, typ, label=col_name, markersize=1)
 
-    plt.title('{} - {}'.format(
-        df.index[0].strftime('%d/%m/%Y'), df.index[-1].strftime('%d/%m/%Y')))
-    plt.legend(loc='upper left')
-    plt.show()
+        plt.title('{} - {}'.format(
+            df.index[0].strftime('%d/%m/%Y'), df.index[-1].strftime('%d/%m/%Y')))
+        plt.legend(loc='upper left')
+        if not combined:
+            plt.show()
+
+    if combined:
+        plt.show()
+
+    if autocorr:
+        # dislay autocorrelation plots
+        for col_name in col_names:
+            pd.tools.plotting.autocorrelation_plot(
+                df[col_name], label=col_name)
+            plt.title('Autocorrelation for {}'.format(col_name))
+            plt.legend(loc='upper right')
+            plt.show()
 
 
 def expandRange(data):
@@ -183,15 +197,24 @@ def aggregateDf(df, col, operation='avg',
 def createDataSets(df, input_measure_cols=['GlobalHorizIrr(PSP)'],
                    input_flag_cols=['GHIFlag'],
                    output_measure_cols=['GlobalHorizIrr(PSP)'],
-                   window=7, split_factor=0.1):
+                   window=7, split_factor=0.1, split=True):
     '''
     Create Data set and split into train/test
     '''
     Input, Output = [], []
-    for index in xrange(0, df.shape[0] - window - 1):
-        final = index + window
-        Input.append(df[input_measure_cols].iloc[index:final])
-        Output.append(df[output_measure_cols].iloc[final])
+    current_window = df[input_measure_cols].iloc[0:window]
+    for index in xrange(window, df.shape[0] - window - 1):
+        Input.append(current_window)
+
+        # get new obs - this is output
+        new_obs = df[output_measure_cols].iloc[index]
+        Output.append(new_obs)
+
+        # modify sliding window
+        current_window = current_window.append(new_obs).drop(current_window.index[0])
+
+    if not split:
+        return Input, Output
 
     # create training and testing sets
     t_in, test_in, t_out, test_out = train_test_split(
@@ -211,14 +234,29 @@ def createDataSets(df, input_measure_cols=['GlobalHorizIrr(PSP)'],
     return train_in, train_out, val_in, val_out, test_in, test_out
 
 
-# def crossValidate(df, model, n_fold,
-# 	cols_to_use=['GlobalHorizIrr(PSP)', 'GHIFlag',
-# 				 'DirNormIrr', 'DNIFlag',
-# 				 'DiffuseHorizIrr', 'DHIFlag'],
-#  	cols_to_pred=['GlobalHorizIrr(PSP)','GHIFlag',
-#  				  'DirNormIrr', 'DNIFlag',
-#  				  'DiffuseHorizIrr', 'DHIFlag']):
-# 	if model == 'Linear'
+def statModel(Input, Output, measure_cols=['GlobalHorizIrr(PSP)']):
+    '''
+    Model Time series data with statistical models
+    '''
+    p, q, r = 20, 1, 0
+    for col in measure_cols:
+        # fit a model - rolling window style
+        predictions = []
+        for i in xrange(len(Input)):
+            input_sample = Input[i]
+            output_sample = Output[i]
+            model = arima_model.ARIMA(input_sample, order=(p, q, r)).fit(disp=0)
+            residuals = pd.DataFrame(model.resid)
+
+            # predict using the model
+            model_out = model.forecast()
+            predictions.append(model_out[0])
+    
+        # get the errors and plot
+        diff = Output - predictions
+        plt.plot(Output)
+        plt.plot(predictions)
+        plt.show()
 
 
 def Run(args):
@@ -244,12 +282,13 @@ def Run(args):
     print Data_sum[measure_cols].corr(), '\n'
 
     # plot Data
-    plot(measure_cols, Data_sum, '-')
+    # plot(measure_cols, Data_sum, '-')
 
-    # create data set
-    train_in, train_out, val_in, val_out, test_in, test_out = createDataSets(
-        Data_sum)
-    print train_in
+    # make the dataset
+    Input, Output = createDataSets(df, split=False, window=100)
+
+    # ARIMA
+    statModel(Input, Output)
 
 
 if __name__ == '__main__':
