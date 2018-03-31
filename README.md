@@ -9,5 +9,9 @@ Data is expected to be from one site, and in csv format
 ### Running
     python Analyse.py --data_dir <Data Folder>
     
+or
+    
+    python Analyse.py --data <csv file with proper headers and timestamp>
+    
 ### For options
-    python Analyse.py --h
+    python Analyse.py -h
