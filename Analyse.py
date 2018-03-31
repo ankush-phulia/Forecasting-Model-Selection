@@ -6,6 +6,7 @@ import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 # statistical models
+from statsmodels.tsa.stattools import adfuller, acf, pacf
 from statsmodels.tsa import arima_model
 # sklearn models
 from sklearn.model_selection import train_test_split, cross_val_score
@@ -60,7 +61,7 @@ def closePlot(event):
         plt.close(event.canvas.figure)
 
 
-def plot(col_names, df, typ='o', autocorr=True, combined=True):
+def plot(col_names, df, typ='o', combined=True):
     '''
     Plot a column of dataframe, given the flag is valid, i.e. not 99
     '''
@@ -79,15 +80,6 @@ def plot(col_names, df, typ='o', autocorr=True, combined=True):
 
     if combined:
         plt.show()
-
-    if autocorr:
-        # dislay autocorrelation plots
-        for col_name in col_names:
-            pd.tools.plotting.autocorrelation_plot(
-                df[col_name], label=col_name)
-            plt.title('Autocorrelation for {}'.format(col_name))
-            plt.legend(loc='upper right')
-            plt.show()
 
 
 def expandRange(data):
@@ -191,6 +183,7 @@ def aggregateDf(df, col, operation='avg',
     elif operation == 'sum':
         df = df.resample(col).sum()
 
+    df = df.replace(0, np.nan).dropna()
     return df
 
 
@@ -234,29 +227,111 @@ def createDataSets(df, input_measure_cols=['GlobalHorizIrr(PSP)'],
     return train_in, train_out, val_in, val_out, test_in, test_out
 
 
-def statModel(Input, Output, measure_cols=['GlobalHorizIrr(PSP)']):
+def checkStationarity(df, measure_col, plot=False, silent=False):
+    '''
+    Using rolling stats and Dickey-Fuller to check stationarity
+    '''
+    ts = df[measure_col]
+
+    # Determing rolling statistics
+    rolmean = pd.rolling_mean(ts, window=12)
+    rolstd = pd.rolling_std(ts, window=12)
+
+    # Plot rolling statistics:
+    if plot:
+        orig = plt.plot(ts, label='Original')
+        mean = plt.plot(rolmean, label='Rolling Mean')
+        std = plt.plot(rolstd, label = 'Rolling Std')
+        plt.legend(loc='best')
+        plt.title('Rolling Mean & Standard Deviation for {}'.format(measure_col))
+        plt.show()
+    
+    # Perform Dickey-Fuller test:
+    dftest = adfuller(ts, autolag='AIC')
+    dfoutput = pd.Series(
+        dftest[0:4], index=
+        ['Test Statistic','p-value','#Lags Used','Number of Observations Used'])
+    
+    # check test statistic vs critical values - get confidence
+    confidence = 0
+    for key, value in dftest[4].iteritems():
+        dfoutput['Critical Value ({})'.format(key)] = value
+        if dfoutput['Test Statistic'] < value:
+            confidence = max(confidence, 100 - int(key[:-1]))
+    
+    # print the results
+    if not silent:
+        print 'Dicky Fuller for {} : '.format(measure_col)
+        print dfoutput, '\n'
+
+    return confidence
+
+
+def plotACF_PACF(df, measure_col):
+    '''
+    Plot the autocorrelation and partial autocorrelation plots
+    '''
+    ts = df[measure_col]
+    lag_acf = acf(ts, nlags=200)
+    lag_pacf = pacf(ts, method='ols', nlags=100)
+
+    # plot acf
+    plt.plot(lag_acf)
+    plt.axhline(y=0, linestyle='--', color='gray')
+    plt.axhline(y= -1.96 / np.sqrt(len(ts)),linestyle='--',color='gray')
+    plt.axhline(y= 1.96 / np.sqrt(len(ts)),linestyle='--',color='gray')
+    plt.title('Autocorrelation Function for {}'.format(measure_col))
+    plt.show()
+
+    # plot pacf
+    plt.plot(lag_acf)
+    plt.axhline(y=0, linestyle='--', color='gray')
+    plt.axhline(y= -1.96 / np.sqrt(len(ts)),linestyle='--',color='gray')
+    plt.axhline(y= 1.96 / np.sqrt(len(ts)),linestyle='--',color='gray')
+    plt.title('Partial Autocorrelation Function for {}'.format(measure_col))
+    plt.show()
+
+    # dislay autocorrelation plots
+    pd.tools.plotting.autocorrelation_plot(
+        df[measure_col], label=measure_col)
+    plt.title('Autocorrelation for {}'.format(measure_col))
+    plt.legend(loc='upper right')
+    plt.show()
+
+
+def statModel(df, measure_cols=['GlobalHorizIrr(PSP)']):
     '''
     Model Time series data with statistical models
     '''
-    p, q, r = 20, 1, 0
     for col in measure_cols:
-        # fit a model - rolling window style
-        predictions = []
-        for i in xrange(len(Input)):
-            input_sample = Input[i]
-            output_sample = Output[i]
-            model = arima_model.ARIMA(input_sample, order=(p, q, r)).fit(disp=0)
-            residuals = pd.DataFrame(model.resid)
+        # checkStationarity(df, col)
+        # plotACF_PACF(df, col)
+        ts = df[col]
+        p, q, d = 80, 80, 0
+        model = arima_model.ARIMA(ts, order=(p, d, q)).fit()
+        plt.plot(ts)
+        plt.plot(model.fittedvalues, color='red')
+        plt.title('RSS : {}'.format(sum((model.fittedvalues - ts)**2)))
 
-            # predict using the model
-            model_out = model.forecast()
-            predictions.append(model_out[0])
+    # p, q, r = 20, 1, 0
+    # for col in measure_cols:
+    #     # fit a model - rolling window style
+    #     predictions = []
+    #     for i in xrange(len(Input)):
+    #         input_sample = Input[i]
+    #         output_sample = Output[i]
+    #         model = arima_model.ARIMA(input_sample, order=(p, q, r)).fit(disp=0)
+    #         residuals = pd.DataFrame(model.resid)
+
+    #         # predict using the model
+    #         model_out = model.forecast()
+    #         predictions.append(model_out[0])
     
-        # get the errors and plot
-        diff = Output - predictions
-        plt.plot(Output)
-        plt.plot(predictions)
-        plt.show()
+    #     # get the errors and plot
+    #     diqff = Output - predictions
+    #     plt.plot(Output)
+    #     plt.plot(predictions)
+    #     plt.show()
 
 
 def Run(args):
@@ -276,7 +351,8 @@ def Run(args):
 
     # take sum on a given time scale
     Data_sum = aggregateDf(Data, 'D', 'sum')
-    
+    # Data_sum.to_csv('data.csv')
+
     # get correlation between the measure columns
     print 'Correlation in {}'.format(measure_cols)
     print Data_sum[measure_cols].corr(), '\n'
@@ -285,12 +361,16 @@ def Run(args):
     # plot(measure_cols, Data_sum, '-')
 
     # make the dataset
-    Input, Output = createDataSets(df, split=False, window=100)
+    # Input, Output = createDataSets(df, split=False, window=100)
 
     # ARIMA
-    statModel(Input, Output)
+    statModel(Data_sum)
 
 
 if __name__ == '__main__':
     args = vars(getParser().parse_args(sys.argv[1:]))
     Run(args)
+
+
+
+   
