@@ -61,7 +61,7 @@ def closePlot(event):
         plt.close(event.canvas.figure)
 
 
-def plot(col_names, df, typ='o', combined=True):
+def plot(col_names, df, combined=True):
     '''
     Plot a column of dataframe, given the flag is valid, i.e. not 99
     '''
@@ -70,7 +70,7 @@ def plot(col_names, df, typ='o', combined=True):
         if col_name not in df.columns:
             continue
         Y = df[col_name]
-        plt.plot(Y, typ, label=col_name, markersize=1)
+        plt.plot(Y, 'o', label=col_name, markersize=3)
 
         plt.title('{} - {}'.format(
             df.index[0].strftime('%d/%m/%Y'), df.index[-1].strftime('%d/%m/%Y')))
@@ -151,22 +151,19 @@ def cleanupDf(df, measure_cols=[
         'GlobalHorizIrr(PSP)',
         'DirNormIrr',
         'DiffuseHorizIrr'],
-        flag_cols=['GHIFlag', 'DNIFlag', 'DHIFlag']):
+        flag_cols=['GHIFlag', 'DNIFlag', 'DHIFlag'],
+        low_flag_bnd=3, up_flag_bnd=6):
     '''
     Remove entries with invalid flags and invalid columns
     '''
-    # remove negative measures
-    numbers = df._get_numeric_data()
-    numbers[numbers < 0] = np.nan
-
-    # replace all -ves, 99 flags and -99999.0 with NaN
+    # replace all bad flags with NaN - SERI_QC
     for measure, flag in zip(measure_cols, flag_cols):
-        df[flag].replace(99, np.nan, inplace=True)
-        df.loc[df[flag].isnull(), measure] = np.nan
+        df.loc[df[flag] < low_flag_bnd, measure] = np.nan
+        df.loc[df[flag] > up_flag_bnd, measure] = np.nan
+        # df.loc[df[measure] < 0, measure] = np.nan
 
     # remove invalid rows - all NaNs
     df.dropna(axis=0, how='all', subset=measure_cols, inplace=True)
-    # df.dropna(axis=1, how='all', inplace=True)
 
 
 def aggregateDf(df, col, operation='avg',
@@ -351,20 +348,21 @@ def Run(args):
 
     # take sum on a given time scale
     Data_sum = aggregateDf(Data, 'D', 'sum')
-    # Data_sum.to_csv('data.csv')
+    # Data.to_csv('base_data.csv')
+    # Data_sum.to_csv('daily_summed.csv')
 
     # get correlation between the measure columns
     print 'Correlation in {}'.format(measure_cols)
     print Data_sum[measure_cols].corr(), '\n'
 
     # plot Data
-    # plot(measure_cols, Data_sum, '-')
+    plot(measure_cols, Data_sum, '-')
 
     # make the dataset
     # Input, Output = createDataSets(df, split=False, window=100)
 
     # ARIMA
-    statModel(Data_sum)
+    # statModel(Data_sum)
 
 
 if __name__ == '__main__':
