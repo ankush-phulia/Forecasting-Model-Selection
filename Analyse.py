@@ -10,7 +10,9 @@ from statsmodels.tsa.stattools import adfuller, acf, pacf
 from statsmodels.tsa import arima_model
 # sklearn models
 from sklearn.model_selection import train_test_split, cross_val_score
-# from sklearn import preprocessing, linear_model, svm, neural_network, ensemble
+from sklearn.pipeline import make_pipeline, Pipeline
+from sklearn import preprocessing, svm, tree, neural_network, ensemble, isotonic, gaussian_process
+from sklearn.metrics import mean_squared_error
 
 # display setting
 pd.set_option('expand_frame_repr', False)
@@ -133,9 +135,9 @@ def readData(data_dir, data="", years="", start_month=0, num_months=0):
             if first_month_found and (not(len(years)) or f[2:6] in years):
                 # make dataframe out of csv and append it
                 df = pd.read_csv(
-                        os.path.join(data_dir, f),
-                        usecols=range(numTimeCols + len(measure_cols) * 2),
-                        header=None, parse_dates=[[0, 1, 2, 3, 4]])
+                    os.path.join(data_dir, f),
+                    usecols=range(numTimeCols + len(measure_cols) * 2),
+                    header=None, parse_dates=[[0, 1, 2, 3, 4]])
                 # rename columns and set index to time
                 df.columns = cols
                 df.set_index('Timestamp', inplace=True)
@@ -150,7 +152,7 @@ def cleanupDf(df, measure_cols=[
         'DirNormIrr',
         'DiffuseHorizIrr'],
         flag_cols=['GHIFlag', 'DNIFlag', 'DHIFlag'],
-        low_flag_bnd=0, up_flag_bnd=6):
+        low_flag_bnd=2, up_flag_bnd=6):
     '''
     Remove entries with invalid flags and invalid columns
     '''
@@ -158,7 +160,7 @@ def cleanupDf(df, measure_cols=[
     for measure, flag in zip(measure_cols, flag_cols):
         df.loc[df[flag] < low_flag_bnd, measure] = np.nan
         df.loc[df[flag] > up_flag_bnd, measure] = np.nan
-        # df.loc[df[measure] < 0, measure] = np.nan
+        df.loc[df[measure] < 0, measure] = np.nan
 
     # remove invalid rows - all NaNs
     df.dropna(axis=0, how='all', subset=measure_cols, inplace=True)
@@ -182,7 +184,7 @@ def aggregateDf(df, col, operation='avg',
     return df
 
 
-def dumpSets(data_dir, train_in, train_out, val_in, val_out, test_in, test_out):
+def dumpSets(data_dir, train_in, train_out, test_in, test_out):
     '''
     Dump sets into files
     '''
@@ -191,19 +193,15 @@ def dumpSets(data_dir, train_in, train_out, val_in, val_out, test_in, test_out):
         pickle.dump(train_in, f)
     with open(os.path.join(data_dir, 'Train/train_out.pkl'), 'wb') as f:
         pickle.dump(train_out, f)
-    with open(os.path.join(data_dir, 'Val/train_in.pkl'), 'wb') as f:
-        pickle.dump(val_in, f)
-    with open(os.path.join(data_dir, 'Val/train_out.pkl'), 'wb') as f:
-        pickle.dump(val_out, f)
     with open(os.path.join(data_dir, 'Test/train_in.pkl'), 'wb') as f:
         pickle.dump(test_in, f)
     with open(os.path.join(data_dir, 'Test/train_out.pkl'), 'wb') as f:
         pickle.dump(test_out, f)
 
 
-def createDataSets(df, input_measure_cols=['GlobalHorizIrr(PSP)'],
-                   input_flag_cols=['GHIFlag'],
-                   output_measure_cols=['GlobalHorizIrr(PSP)'],
+def createDataSets(df, input_measure_cols=['DirNormIrr'],
+                   input_flag_cols=['DNIFlag'],
+                   output_measure_cols=['DirNormIrr'],
                    window=7, split_factor=0.1, split=True, dump_dir=''):
     '''
     Create Data set and split into train/test, dump into file
@@ -218,16 +216,17 @@ def createDataSets(df, input_measure_cols=['GlobalHorizIrr(PSP)'],
         Output.append(new_obs)
 
         # modify sliding window
-        current_window = current_window.append(new_obs).drop(current_window.index[0])
+        current_window = current_window.append(
+            new_obs).drop(current_window.index[0])
 
     if not split:
         return Input, Output
 
     # create training and testing sets
-    t_in, test_in, t_out, test_out = train_test_split(
+    train_in, test_in, train_out, test_out = train_test_split(
         Input, Output, test_size=split_factor)
-    train_in, val_in, train_out, val_out = train_test_split(
-        t_in, t_out, test_size=split_factor)
+    # train_in, val_in, train_out, val_out = train_test_split(
+    #     t_in, t_out, test_size=split_factor)
 
     # print information
     print 'Input  : Past {} days\' {}\nOutput : Current {}'.format(
@@ -235,12 +234,12 @@ def createDataSets(df, input_measure_cols=['GlobalHorizIrr(PSP)'],
     print 'Constructed {} samples from {} observations'.format(
         len(Input), len(df))
     print 'Training samples   : {}'.format(len(train_in))
-    print 'Validation samples : {}'.format(len(val_in))
     print 'Testing samples    : {}'.format(len(test_in))
+    # print 'Validation samples : {}'.format(len(val_in))
 
     if len(dump_dir):
         dumpSets(dump_dir,
-         train_in, train_out, val_in, val_out, test_in, test_out)
+                 train_in, train_out, test_in, test_out)
 
 
 def checkStationarity(df, measure_col, plot=False, silent=False):
@@ -257,24 +256,23 @@ def checkStationarity(df, measure_col, plot=False, silent=False):
     if plot:
         orig = plt.plot(ts, label='Original')
         mean = plt.plot(rolmean, label='Rolling Mean')
-        std = plt.plot(rolstd, label = 'Rolling Std')
+        std = plt.plot(rolstd, label='Rolling Std')
         plt.legend(loc='best')
         plt.title('Rolling Mean & Standard Deviation for {}'.format(measure_col))
         plt.show()
-    
+
     # Perform Dickey-Fuller test:
     dftest = adfuller(ts, autolag='AIC')
     dfoutput = pd.Series(
-        dftest[0:4], index=
-        ['Test Statistic','p-value','#Lags Used','Number of Observations Used'])
-    
+        dftest[0:4], index=['Test Statistic', 'p-value', '#Lags Used', 'Number of Observations Used'])
+
     # check test statistic vs critical values - get confidence
     confidence = 0
     for key, value in dftest[4].iteritems():
         dfoutput['Critical Value ({})'.format(key)] = value
         if dfoutput['Test Statistic'] < value:
             confidence = max(confidence, 100 - int(key[:-1]))
-    
+
     # print the results
     if not silent:
         print 'Dicky Fuller for {} : '.format(measure_col)
@@ -294,16 +292,16 @@ def plotACF_PACF(df, measure_col):
     # plot acf
     plt.plot(lag_acf)
     plt.axhline(y=0, linestyle='--', color='gray')
-    plt.axhline(y= -1.96 / np.sqrt(len(ts)),linestyle='--',color='gray')
-    plt.axhline(y= 1.96 / np.sqrt(len(ts)),linestyle='--',color='gray')
+    plt.axhline(y=-1.96 / np.sqrt(len(ts)), linestyle='--', color='gray')
+    plt.axhline(y=1.96 / np.sqrt(len(ts)), linestyle='--', color='gray')
     plt.title('Autocorrelation Function for {}'.format(measure_col))
     plt.show()
 
     # plot pacf
     plt.plot(lag_acf)
     plt.axhline(y=0, linestyle='--', color='gray')
-    plt.axhline(y= -1.96 / np.sqrt(len(ts)),linestyle='--',color='gray')
-    plt.axhline(y= 1.96 / np.sqrt(len(ts)),linestyle='--',color='gray')
+    plt.axhline(y=-1.96 / np.sqrt(len(ts)), linestyle='--', color='gray')
+    plt.axhline(y=1.96 / np.sqrt(len(ts)), linestyle='--', color='gray')
     plt.title('Partial Autocorrelation Function for {}'.format(measure_col))
     plt.show()
 
@@ -329,45 +327,84 @@ def statModel(df, measure_cols=['GlobalHorizIrr(PSP)']):
         plt.plot(model.fittedvalues, color='red')
         plt.title('RSS : {}'.format(sum((model.fittedvalues - ts)**2)))
 
-    # p, q, r = 20, 1, 0
-    # for col in measure_cols:
-    #     # fit a model - rolling window style
-    #     predictions = []
-    #     for i in xrange(len(Input)):
-    #         input_sample = Input[i]
-    #         output_sample = Output[i]
-    #         model = arima_model.ARIMA(input_sample, order=(p, q, r)).fit(disp=0)
-    #         residuals = pd.DataFrame(model.resid)
 
-    #         # predict using the model
-    #         model_out = model.forecast()
-    #         predictions.append(model_out[0])
-    
-    #     # get the errors and plot
-    #     diqff = Output - predictions
-    #     plt.plot(Output)
-    #     plt.plot(predictions)
-    #     plt.show()
-
-
-def loadDumpedData(dump_dir='Dumped Data'):
+def loadDumpedData(data_dir='Dumped Data'):
     '''
     Load training, testing and validation sets from dumped pickle
     '''
     import pickle
     with open(os.path.join(data_dir, 'Train/train_in.pkl')) as f:
-        train_in = pickle.load(f)
+        train_in = map(lambda x: x.values.T[0], pickle.load(f))
     with open(os.path.join(data_dir, 'Train/train_out.pkl')) as f:
-        train_out = pickle.dump(f)
-    with open(os.path.join(data_dir, 'Val/train_in.pkl')) as f:
-        val_in = pickle.dump(f)
-    with open(os.path.join(data_dir, 'Val/train_out.pkl')) as f:
-        val_out = pickle.dump(f)
+        train_out = map(lambda x: x.values.T[0], pickle.load(f))
     with open(os.path.join(data_dir, 'Test/train_in.pkl')) as f:
-        test_in = pickle.dump(f)
+        test_in = map(lambda x: x.values.T[0], pickle.load(f))
     with open(os.path.join(data_dir, 'Test/train_out.pkl')) as f:
-        test_out = pickle.dump(f)
-    return train_in, train_out, val_in, val_out, test_in, test_out
+        test_out = map(lambda x: x.values.T[0], pickle.load(f))
+    return train_in, train_out, test_in, test_out
+
+
+def crossValidateModel(train_in, train_out, model='', n=5):
+    '''
+    Run n-fold cross-validation for training data with various methods
+    '''
+    if model == 'SVM':
+        model = make_pipeline(preprocessing.StandardScaler(), svm.SVR())
+    elif model == 'ANN':
+        model = make_pipeline(
+            preprocessing.StandardScaler(),
+            neural_network.MLPRegressor())
+    elif model == 'DT':
+        model = make_pipeline(
+            preprocessing.StandardScaler(),
+            tree.DecisionTreeRegressor())
+    elif model == 'GTB':
+        model = make_pipeline(
+            preprocessing.StandardScaler(),
+            ensemble.GradientBoostingRegressor())
+    elif model == 'RF':
+        model = make_pipeline(
+            preprocessing.StandardScaler(),
+            ensemble.RandomForestRegressor())
+    elif model == 'ET':
+        model = make_pipeline(
+            preprocessing.StandardScaler(),
+            ensemble.ExtraTreesRegressor())
+    elif model == 'ADA':
+        model = make_pipeline(
+            preprocessing.StandardScaler(),
+            ensemble.AdaBoostRegressor())
+
+    scores = cross_val_score(
+        model, train_in, train_out, cv=n)
+    print '{} averaged {} for {}-fold cross validation'.format(
+        model, abs(sum(scores)) / n, n)
+
+
+def gradientBoost(train_in, train_out, test_in, test_out):
+    est = ensemble.GradientBoostingRegressor(
+        n_estimators=100,
+        learning_rate=0.1,
+        max_depth=100,
+        random_state=0,
+        loss='lad')
+    model = make_pipeline(preprocessing.StandardScaler(), est)
+    model.fit(train_in, train_out)
+    pred_out = model.predict(test_in)
+    for i in xrange(len(test_in)):
+        print pred_out[i], test_out[i]
+    mse = mean_squared_error(test_out, model.predict(test_in))
+    print 'Average MSE : {}'.format(mse)
+
+
+def ANN(train_in, train_out, test_in, test_out):
+    est = neural_network.MLPRegressor(hidden_layer_sizes=np.array(
+        [30, 30, 30]), solver='lbfgs', learning_rate='adaptive', max_iter=1000)
+    model = make_pipeline(preprocessing.StandardScaler(), est)
+    model.fit(train_in, train_out)
+    pred_out = model.predict(test_in)
+    mse = mean_squared_error(test_out, model.predict(test_in))
+    print 'Average MSE : {}'.format(mse)
 
 
 def Run(args):
@@ -383,6 +420,7 @@ def Run(args):
 
     # put them all together
     Data = pd.concat(dfs)
+    # Data.to_csv('base_data.csv')
     measure_cols = ['GlobalHorizIrr(PSP)', 'DirNormIrr', 'DiffuseHorizIrr']
 
     # take sum on a given time scale
@@ -395,18 +433,26 @@ def Run(args):
     # plot Data
     # plot(measure_cols, Data, '-')
 
-    # make the dataset & dump
-    # createDataSets(Data_sum, split=True, window=100, dump_dir='Dumped Data')
-    train_in, train_out, val_in, val_out, test_in, test_out = loadDumpedData()
-
     # ARIMA
     # statModel(Data_sum)
+
+    # make the dataset & dump
+    # createDataSets(Data_sum, split=True, window=30, dump_dir='Dumped Data')
+    train_in, train_out, test_in, test_out = loadDumpedData()
+
+    # try out models
+    # crossValidateModel(train_in, train_out, 'SVM')
+    # crossValidateModel(train_in, train_out, 'ANN')
+    # crossValidateModel(train_in, train_out, 'DT')
+    # crossValidateModel(train_in, train_out, 'GTB')
+    # crossValidateModel(train_in, train_out, 'RF')
+    # crossValidateModel(train_in, train_out, 'ET')
+    # crossValidateModel(train_in, train_out, 'ADA')
+
+    # predict using gradient boost
+    gradientBoost(train_in, train_out, test_in, test_out)
 
 
 if __name__ == '__main__':
     args = vars(getParser().parse_args(sys.argv[1:]))
     Run(args)
-
-
-
-   
