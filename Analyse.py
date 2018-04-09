@@ -182,12 +182,31 @@ def aggregateDf(df, col, operation='avg',
     return df
 
 
+def dumpSets(data_dir, train_in, train_out, val_in, val_out, test_in, test_out):
+    '''
+    Dump sets into files
+    '''
+    import pickle
+    with open(os.path.join(data_dir, 'Train/train_in.pkl'), 'wb') as f:
+        pickle.dump(train_in, f)
+    with open(os.path.join(data_dir, 'Train/train_out.pkl'), 'wb') as f:
+        pickle.dump(train_out, f)
+    with open(os.path.join(data_dir, 'Val/train_in.pkl'), 'wb') as f:
+        pickle.dump(val_in, f)
+    with open(os.path.join(data_dir, 'Val/train_out.pkl'), 'wb') as f:
+        pickle.dump(val_out, f)
+    with open(os.path.join(data_dir, 'Test/train_in.pkl'), 'wb') as f:
+        pickle.dump(test_in, f)
+    with open(os.path.join(data_dir, 'Test/train_out.pkl'), 'wb') as f:
+        pickle.dump(test_out, f)
+
+
 def createDataSets(df, input_measure_cols=['GlobalHorizIrr(PSP)'],
                    input_flag_cols=['GHIFlag'],
                    output_measure_cols=['GlobalHorizIrr(PSP)'],
-                   window=7, split_factor=0.1, split=True):
+                   window=7, split_factor=0.1, split=True, dump_dir=''):
     '''
-    Create Data set and split into train/test
+    Create Data set and split into train/test, dump into file
     '''
     Input, Output = [], []
     current_window = df[input_measure_cols].iloc[0:window]
@@ -219,7 +238,9 @@ def createDataSets(df, input_measure_cols=['GlobalHorizIrr(PSP)'],
     print 'Validation samples : {}'.format(len(val_in))
     print 'Testing samples    : {}'.format(len(test_in))
 
-    return train_in, train_out, val_in, val_out, test_in, test_out
+    if len(dump_dir):
+        dumpSets(dump_dir,
+         train_in, train_out, val_in, val_out, test_in, test_out)
 
 
 def checkStationarity(df, measure_col, plot=False, silent=False):
@@ -329,6 +350,26 @@ def statModel(df, measure_cols=['GlobalHorizIrr(PSP)']):
     #     plt.show()
 
 
+def loadDumpedData(dump_dir='Dumped Data'):
+    '''
+    Load training, testing and validation sets from dumped pickle
+    '''
+    import pickle
+    with open(os.path.join(data_dir, 'Train/train_in.pkl')) as f:
+        train_in = pickle.load(f)
+    with open(os.path.join(data_dir, 'Train/train_out.pkl')) as f:
+        train_out = pickle.dump(f)
+    with open(os.path.join(data_dir, 'Val/train_in.pkl')) as f:
+        val_in = pickle.dump(f)
+    with open(os.path.join(data_dir, 'Val/train_out.pkl')) as f:
+        val_out = pickle.dump(f)
+    with open(os.path.join(data_dir, 'Test/train_in.pkl')) as f:
+        test_in = pickle.dump(f)
+    with open(os.path.join(data_dir, 'Test/train_out.pkl')) as f:
+        test_out = pickle.dump(f)
+    return train_in, train_out, val_in, val_out, test_in, test_out
+
+
 def Run(args):
     cid = plt.gcf().canvas.mpl_connect('key_press_event', closePlot)
 
@@ -346,18 +387,17 @@ def Run(args):
 
     # take sum on a given time scale
     Data_sum = aggregateDf(Data, 'D', 'sum')
-    # Data.to_csv('base_data.csv')
-    # Data_sum.to_csv('daily_summed.csv')
 
     # get correlation between the measure columns
-    print 'Correlation in {}'.format(measure_cols)
-    print Data_sum[measure_cols].corr(), '\n'
+    # print 'Correlation in {}'.format(measure_cols)
+    # print Data_sum[measure_cols].corr(), '\n'
 
     # plot Data
-    plot(measure_cols, Data, '-')
+    # plot(measure_cols, Data, '-')
 
-    # make the dataset
-    # Input, Output = createDataSets(df, split=False, window=100)
+    # make the dataset & dump
+    # createDataSets(Data_sum, split=True, window=100, dump_dir='Dumped Data')
+    train_in, train_out, val_in, val_out, test_in, test_out = loadDumpedData()
 
     # ARIMA
     # statModel(Data_sum)
