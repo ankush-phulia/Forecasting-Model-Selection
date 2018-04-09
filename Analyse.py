@@ -10,9 +10,7 @@ from statsmodels.tsa.stattools import adfuller, acf, pacf
 from statsmodels.tsa import arima_model
 # sklearn models
 from sklearn.model_selection import train_test_split, cross_val_score
-# from sklearn.pipeline import make_pipeline, Pipeline
 # from sklearn import preprocessing, linear_model, svm, neural_network, ensemble
-
 
 # display setting
 pd.set_option('expand_frame_repr', False)
@@ -70,11 +68,11 @@ def plot(col_names, df, combined=True):
         if col_name not in df.columns:
             continue
         Y = df[col_name]
-        plt.plot(Y, 'o', label=col_name, markersize=3)
+        plt.plot(Y, '-', label=col_name, markersize=3)
 
         plt.title('{} - {}'.format(
             df.index[0].strftime('%d/%m/%Y'), df.index[-1].strftime('%d/%m/%Y')))
-        plt.legend(loc='upper left')
+        plt.legend(loc='upper right')
         if not combined:
             plt.show()
 
@@ -152,7 +150,7 @@ def cleanupDf(df, measure_cols=[
         'DirNormIrr',
         'DiffuseHorizIrr'],
         flag_cols=['GHIFlag', 'DNIFlag', 'DHIFlag'],
-        low_flag_bnd=3, up_flag_bnd=6):
+        low_flag_bnd=0, up_flag_bnd=6):
     '''
     Remove entries with invalid flags and invalid columns
     '''
@@ -356,7 +354,7 @@ def Run(args):
     print Data_sum[measure_cols].corr(), '\n'
 
     # plot Data
-    plot(measure_cols, Data_sum, '-')
+    plot(measure_cols, Data, '-')
 
     # make the dataset
     # Input, Output = createDataSets(df, split=False, window=100)
