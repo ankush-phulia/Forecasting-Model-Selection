@@ -199,25 +199,46 @@ def dumpSets(data_dir, train_in, train_out, test_in, test_out):
         pickle.dump(test_out, f)
 
 
-def createDataSets(df, input_measure_cols=['DirNormIrr'],
+def slidingWindow(df, window, imc, omc):
+    '''
+    Slide a window od size 'window' over data in df to get input and output
+    '''
+    Input, Output = [], []
+    current_window = df[imc].iloc[0:window]
+    for index in xrange(window, df.shape[0] - 1):
+        Input.append(current_window)
+
+        # get new obs - this is output
+        new_obs = df[omc].iloc[index]
+        Output.append(new_obs)
+
+        # modify sliding window
+        current_window = current_window.append(
+            new_obs).drop(current_window.index[0])
+    return Input, Output
+
+
+def createDataSets(df, typ='continuous',
+                   input_measure_cols=['DirNormIrr'],
                    input_flag_cols=['DNIFlag'],
                    output_measure_cols=['DirNormIrr'],
                    window=7, split_factor=0.1, split=True, dump_dir=''):
     '''
     Create Data set and split into train/test, dump into file
     '''
-    Input, Output = [], []
-    current_window = df[input_measure_cols].iloc[0:window]
-    for index in xrange(window, df.shape[0] - window - 1):
-        Input.append(current_window)
+    
+    if typ == 'cont':
+        # input is continuous data of 'window' days
+        Input, Output = slidingWindow(df, window, input_measure_cols, output_measure_cols)
 
-        # get new obs - this is output
-        new_obs = df[output_measure_cols].iloc[index]
-        Output.append(new_obs)
-
-        # modify sliding window
-        current_window = current_window.append(
-            new_obs).drop(current_window.index[0])
+    elif typ == 'date':
+        # input is data for a date of the past 'window' years
+        Input, Output = [], []
+        for date, group in df.groupby([df.index.day, df.index.month]):
+            # for each date, iterate over the years
+            i, o = slidingWindow(group, window, input_measure_cols, output_measure_cols)
+            Input += i
+            Output += o
 
     if not split:
         return Input, Output
@@ -353,7 +374,7 @@ def crossValidateModel(train_in, train_out, model='', n=5):
     elif model == 'ANN':
         model = make_pipeline(
             preprocessing.StandardScaler(),
-            neural_network.MLPRegressor())
+            neural_network.MLPRegressor(max_iter=1))
     elif model == 'DT':
         model = make_pipeline(
             preprocessing.StandardScaler(),
@@ -398,12 +419,21 @@ def gradientBoost(train_in, train_out, test_in, test_out):
 
 
 def ANN(train_in, train_out, test_in, test_out):
-    est = neural_network.MLPRegressor(hidden_layer_sizes=np.array(
-        [30, 30, 30]), solver='lbfgs', learning_rate='adaptive', max_iter=1000)
+    est = neural_network.MLPRegressor(solver='lbfgs', learning_rate='adaptive', max_iter=1)
     model = make_pipeline(preprocessing.StandardScaler(), est)
     model.fit(train_in, train_out)
     pred_out = model.predict(test_in)
+    for i in xrange(len(test_in)):
+        print pred_out[i], test_out[i]
     mse = mean_squared_error(test_out, model.predict(test_in))
+    print 'Average MSE : {}'.format(mse)
+
+
+def oldAvg(test_in, test_out):
+    pred = map(lambda x : x.mean(), test_in)
+    for i in xrange(len(test_in)):
+        print pred[i], test_out[i]
+    mse = mean_squared_error(test_out, pred)
     print 'Average MSE : {}'.format(mse)
 
 
@@ -431,14 +461,14 @@ def Run(args):
     # print Data_sum[measure_cols].corr(), '\n'
 
     # plot Data
-    # plot(measure_cols, Data, '-')
+    # plot(measure_cols, Data_sum, '-')
 
     # ARIMA
     # statModel(Data_sum)
 
     # make the dataset & dump
-    # createDataSets(Data_sum, split=True, window=30, dump_dir='Dumped Data')
-    train_in, train_out, test_in, test_out = loadDumpedData()
+    # createDataSets(Data_sum, 'date', split=True, window=5, dump_dir='Dumped Data Date')
+    train_in, train_out, test_in, test_out = loadDumpedData('Dumped Data Date 5')
 
     # try out models
     # crossValidateModel(train_in, train_out, 'SVM')
@@ -450,8 +480,8 @@ def Run(args):
     # crossValidateModel(train_in, train_out, 'ADA')
 
     # predict using gradient boost
-    gradientBoost(train_in, train_out, test_in, test_out)
-
+    ANN(train_in, train_out, test_in, test_out)
+    # oldAvg(test_in, test_out)
 
 if __name__ == '__main__':
     args = vars(getParser().parse_args(sys.argv[1:]))
