@@ -222,21 +222,23 @@ def createDataSets(df, typ='continuous',
                    input_measure_cols=['DirNormIrr'],
                    input_flag_cols=['DNIFlag'],
                    output_measure_cols=['DirNormIrr'],
-                   window=7, split_factor=0.1, split=True, dump_dir=''):
+                   window=7, split_factor=0.2, split=True, dump_dir=''):
     '''
     Create Data set and split into train/test, dump into file
     '''
-    
+
     if typ == 'cont':
         # input is continuous data of 'window' days
-        Input, Output = slidingWindow(df, window, input_measure_cols, output_measure_cols)
+        Input, Output = slidingWindow(
+            df, window, input_measure_cols, output_measure_cols)
 
     elif typ == 'date':
         # input is data for a date of the past 'window' years
         Input, Output = [], []
         for date, group in df.groupby([df.index.day, df.index.month]):
             # for each date, iterate over the years
-            i, o = slidingWindow(group, window, input_measure_cols, output_measure_cols)
+            i, o = slidingWindow(
+                group, window, input_measure_cols, output_measure_cols)
             Input += i
             Output += o
 
@@ -245,9 +247,7 @@ def createDataSets(df, typ='continuous',
 
     # create training and testing sets
     train_in, test_in, train_out, test_out = train_test_split(
-        Input, Output, test_size=split_factor)
-    # train_in, val_in, train_out, val_out = train_test_split(
-    #     t_in, t_out, test_size=split_factor)
+        Input, Output, test_size=split_factor, shuffle=False)
 
     # print information
     print 'Input  : Past {} days\' {}\nOutput : Current {}'.format(
@@ -355,13 +355,13 @@ def loadDumpedData(data_dir='Dumped Data'):
     '''
     import pickle
     with open(os.path.join(data_dir, 'Train/train_in.pkl')) as f:
-        train_in = map(lambda x: x.values.T[0], pickle.load(f))
+        train_in = pickle.load(f)
     with open(os.path.join(data_dir, 'Train/train_out.pkl')) as f:
-        train_out = map(lambda x: x.values.T[0], pickle.load(f))
+        train_out = pickle.load(f)
     with open(os.path.join(data_dir, 'Test/train_in.pkl')) as f:
-        test_in = map(lambda x: x.values.T[0], pickle.load(f))
+        test_in = pickle.load(f)
     with open(os.path.join(data_dir, 'Test/train_out.pkl')) as f:
-        test_out = map(lambda x: x.values.T[0], pickle.load(f))
+        test_out = pickle.load(f)
     return train_in, train_out, test_in, test_out
 
 
@@ -369,6 +369,8 @@ def crossValidateModel(train_in, train_out, model='', n=5):
     '''
     Run n-fold cross-validation for training data with various methods
     '''
+    train_in = map(lambda x: x.values.T[0], train_in)
+    train_out = map(lambda x: x.values.T[0], train_out)
     if model == 'SVM':
         model = make_pipeline(preprocessing.StandardScaler(), svm.SVR())
     elif model == 'ANN':
@@ -402,39 +404,42 @@ def crossValidateModel(train_in, train_out, model='', n=5):
         model, abs(sum(scores)) / n, n)
 
 
-def gradientBoost(train_in, train_out, test_in, test_out):
-    est = ensemble.GradientBoostingRegressor(
-        n_estimators=100,
-        learning_rate=0.1,
-        max_depth=100,
-        random_state=0,
-        loss='lad')
-    model = make_pipeline(preprocessing.StandardScaler(), est)
-    model.fit(train_in, train_out)
-    pred_out = model.predict(test_in)
-    for i in xrange(len(test_in)):
-        print pred_out[i], test_out[i]
-    mse = mean_squared_error(test_out, model.predict(test_in))
-    print 'Average MSE : {}'.format(mse)
+def evaluateModel(
+        train_in, train_out, test_in, test_out,
+        model='', iters=1, est=1, depth=10):
+    '''
+    Evaluate a model - plot on the testing set, as well as the Mean Squared Error
+    '''
+    # prepare the estimator
+    if model == 'ANN':
+        estimator = neural_network.MLPRegressor(
+            hidden_layer_sizes=([est] * depth), solver='lbfgs',
+            learning_rate='adaptive', max_iter=iters)
+    elif model == 'GB':
+        estimator = ensemble.GradientBoostingRegressor(
+            n_estimators=est, learning_rate=0.1,
+            max_depth=depth, random_state=0, loss='lad')
 
+    # make into numpy arrays
+    sets = [train_in, train_out, test_in, test_out]
+    sets = map(lambda y: map(lambda x: x.values.T[0], y), sets)
 
-def ANN(train_in, train_out, test_in, test_out):
-    est = neural_network.MLPRegressor(solver='lbfgs', learning_rate='adaptive', max_iter=1)
-    model = make_pipeline(preprocessing.StandardScaler(), est)
-    model.fit(train_in, train_out)
-    pred_out = model.predict(test_in)
-    for i in xrange(len(test_in)):
-        print pred_out[i], test_out[i]
-    mse = mean_squared_error(test_out, model.predict(test_in))
-    print 'Average MSE : {}'.format(mse)
+    # fit and predict
+    estimator = make_pipeline(preprocessing.StandardScaler(), estimator)
+    estimator.fit(sets[0], sets[1])
+    pred_out = estimator.predict(sets[2])
+    pred_out = [min(80000, abs(pred)) for pred in pred_out]
+    print 'Model : {}\n Estimators : {}\n Depth : {}\n Iterations : {}\n MSE : {}\n'.format(
+        model, est, depth, iters, mean_squared_error(pred_out, sets[3]))
 
+    # plot the predicted and test out
+    times = map(lambda x: x.name.date(), test_out)
+    plt.plot(times, sets[3], 'o', label='data')
+    plt.plot(times, pred_out, 'o', label='predicted')
+    plt.legend()
+    # plt.show()
 
-def oldAvg(test_in, test_out):
-    pred = map(lambda x : x.mean(), test_in)
-    for i in xrange(len(test_in)):
-        print pred[i], test_out[i]
-    mse = mean_squared_error(test_out, pred)
-    print 'Average MSE : {}'.format(mse)
+    return pred_out
 
 
 def Run(args):
@@ -450,25 +455,23 @@ def Run(args):
 
     # put them all together
     Data = pd.concat(dfs)
-    # Data.to_csv('base_data.csv')
     measure_cols = ['GlobalHorizIrr(PSP)', 'DirNormIrr', 'DiffuseHorizIrr']
 
     # take sum on a given time scale
     Data_sum = aggregateDf(Data, 'D', 'sum')
 
     # get correlation between the measure columns
-    # print 'Correlation in {}'.format(measure_cols)
-    # print Data_sum[measure_cols].corr(), '\n'
+    print 'Correlation in {}'.format(measure_cols)
+    print Data_sum[measure_cols].corr(), '\n'
 
     # plot Data
     # plot(measure_cols, Data_sum, '-')
 
-    # ARIMA
-    # statModel(Data_sum)
-
     # make the dataset & dump
-    # createDataSets(Data_sum, 'date', split=True, window=5, dump_dir='Dumped Data Date')
-    train_in, train_out, test_in, test_out = loadDumpedData('Dumped Data Date 5')
+    createDataSets(Data_sum, 'date',
+                   split=True, window=5, dump_dir='Dumped Data Date 5')
+    train_in, train_out, test_in, test_out = loadDumpedData(
+        'Dumped Data Date 5')
 
     # try out models
     # crossValidateModel(train_in, train_out, 'SVM')
@@ -479,9 +482,10 @@ def Run(args):
     # crossValidateModel(train_in, train_out, 'ET')
     # crossValidateModel(train_in, train_out, 'ADA')
 
-    # predict using gradient boost
-    ANN(train_in, train_out, test_in, test_out)
-    # oldAvg(test_in, test_out)
+    # predict using various models
+    # evaluateModel(train_in, train_out, test_in, test_out, 'ANN', 100, 20, 2)
+    # evaluateModel(train_in, train_out, test_in, test_out, 'GB', 100)
+
 
 if __name__ == '__main__':
     args = vars(getParser().parse_args(sys.argv[1:]))
