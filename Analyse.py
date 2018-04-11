@@ -592,12 +592,8 @@ def Run(args):
 
     gb_args = {'Depth': 15, 'Estimators': 200}
     evaluateModel(
-        train_in,
-        train_out,
-        test_in,
-        test_out,
-        'GradientBoost',
-        **gb_args)
+        train_in, train_out, test_in, test_out,
+        'GradientBoost', **gb_args)
     evaluateModel(
         train_in, train_out,
         train_in + test_in,
@@ -606,12 +602,8 @@ def Run(args):
 
     gb_args = {'Depth': 10, 'Estimators': 200}
     evaluateModel(
-        train_in,
-        train_out,
-        test_in,
-        test_out,
-        'GradientBoost',
-        **gb_args)
+        train_in, train_out, test_in, test_out,
+        'GradientBoost', **gb_args)
     evaluateModel(
         train_in, train_out,
         train_in + test_in,
@@ -636,12 +628,8 @@ def Run(args):
 
     ada_args = {'Estimators': 100}
     evaluateModel(
-        train_in,
-        train_out,
-        test_in,
-        test_out,
-        'ADABoost',
-        **ada_args)
+        train_in, train_out, test_in, test_out,
+        'ADABoost', **ada_args)
     evaluateModel(
         train_in, train_out,
         train_in + test_in,
@@ -650,12 +638,8 @@ def Run(args):
 
     et_args = {'Depth': 10, 'Estimators': 200}
     evaluateModel(
-        train_in,
-        train_out,
-        test_in,
-        test_out,
-        'Extra Trees',
-        **et_args)
+        train_in, train_out, test_in, test_out,
+        'Extra Trees', **et_args)
     evaluateModel(
         train_in, train_out,
         train_in + test_in,
@@ -664,12 +648,8 @@ def Run(args):
 
     et_args = {'Depth': 20, 'Estimators': 100}
     evaluateModel(
-        train_in,
-        train_out,
-        test_in,
-        test_out,
-        'Extra Trees',
-        **et_args)
+        train_in, train_out, test_in, test_out,
+        'Extra Trees', **et_args)
     evaluateModel(
         train_in, train_out,
         train_in + test_in,
@@ -678,12 +658,8 @@ def Run(args):
 
     rf_args = {'Depth': 50, 'Estimators': 200}
     evaluateModel(
-        train_in,
-        train_out,
-        test_in,
-        test_out,
-        'Random Forest',
-        **rf_args)
+        train_in, train_out, test_in, test_out,
+        'Random Forest', **rf_args)
     evaluateModel(
         train_in, train_out,
         train_in + test_in,
