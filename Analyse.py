@@ -419,8 +419,8 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
                 learning_rate_init=1e-3, learning_rate='adaptive')
         else:
             # parameter grid
-            depths = [1, 2, 3, 4, 5]#, 6, 7, 8]
-            nodes = [1, 2, 5, 8, 10, 12, 15, 20, 25]#, 30, 40, 50]
+            depths = [1, 2, 3, 4, 5]  # , 6, 7, 8]
+            nodes = [1, 2, 5, 8, 10, 12, 15, 20, 25]  # , 30, 40, 50]
             hidden_layer_sizes_try = [[element[0]] * element[1]
                                       for element in itertools.product(*[nodes, depths])]
             params = {'max_iter': [1, 10, 100, 200],
@@ -437,7 +437,7 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
     elif model == 'GB':
         if len(kwargs.keys()):
             estimator = ensemble.GradientBoostingRegressor(
-                n_estimators=kwargs['Estimators'], 
+                n_estimators=kwargs['Estimators'],
                 max_depth=kwargs['Depth'], loss='lad')
         else:
             # parameter grid
@@ -452,13 +452,13 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
     elif model == 'SVM':
         if len(kwargs.keys()):
             estimator = svm.SVR(
-                C=kwargs['C'], kernel=kwargs['Kernel'], 
+                C=kwargs['C'], kernel=kwargs['Kernel'],
                 degree=kwargs['Degree'], epsilon=kwargs['Epsilon'])
         else:
-            params = {'C':[100, 200, 400, 600, 800, 1000, 1250, 1500,
-                           1750, 2000, 2500, 3000, 3500, 4000, 5000],
-                      'degree':[2, 3, 4, 5, 6, 7],
-                      'kernel':['poly']}
+            params = {'C': [100, 200, 400, 600, 800, 1000, 1250, 1500,
+                            1750, 2000, 2500, 3000, 3500, 4000, 5000],
+                      'degree': [2, 3, 4, 5, 6, 7],
+                      'kernel': ['poly']}
             estimator = GridSearchCV(
                 svm.SVR(), params, scoring='neg_mean_squared_error', n_jobs=4)
 
@@ -489,7 +489,7 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
     times = map(lambda x: x.name.date(), test_out)
     plt.plot(times, sets[3], 'o', label='Actual')
     plt.plot(times, pred_out, 'o', label='Predicted')
-    plt.title('Daily Aggregate DNI - predicted vs actual')
+    plt.title('Daily Aggregate DNI - predicted vs actual using {}'.format(model))
     plt.legend(loc='upper right')
     plt.show()
 
@@ -539,19 +539,40 @@ def Run(args):
     # predict using various models
     nn_args = {'Depth': 2, 'Nodes': 20, 'Iterations': 100}
     evaluateModel(train_in, train_out, test_in, test_out, 'ANN', **nn_args)
-    evaluateModel(train_in, train_out, train_in + test_in, train_out + test_out, 'ANN', **nn_args)
-    
+    evaluateModel(
+        train_in,
+        train_out,
+        train_in + test_in,
+        train_out + test_out,
+        'ANN', **nn_args)
+
     gb_args = {'Depth': 10, 'Estimators': 100}
     evaluateModel(train_in, train_out, test_in, test_out, 'GB', **gb_args)
-    evaluateModel(train_in, train_out, train_in + test_in, train_out + test_out, 'GB', **gb_args)
+    evaluateModel(
+        train_in,
+        train_out,
+        train_in + test_in,
+        train_out + test_out,
+        'GB', **gb_args)
 
-    svm_args = {'C':500, 'Kernel':'linear', 'Degree': 1, 'Epsilon': 0.01}
+    svm_args = {'C': 500, 'Kernel': 'linear', 'Degree': 1, 'Epsilon': 0.01}
     evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args)
-    evaluateModel(train_in, train_out, train_in + test_in, train_out + test_out, 'SVM', **svm_args)
+    evaluateModel(
+        train_in,
+        train_out,
+        train_in + test_in,
+        train_out + test_out,
+        'SVM', **svm_args)
 
-    svm_args = {'C':1800, 'Kernel':'poly', 'Degree': 3, 'Epsilon': 0.01}
+    svm_args = {'C': 1800, 'Kernel': 'poly', 'Degree': 3, 'Epsilon': 0.01}
     evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args)
-    evaluateModel(train_in, train_out, train_in + test_in, train_out + test_out, 'SVM', **svm_args)
+    evaluateModel(
+        train_in,
+        train_out,
+        train_in + test_in,
+        train_out + test_out,
+        'SVM', **svm_args)
+
 
 if __name__ == '__main__':
     args = vars(getParser().parse_args(sys.argv[1:]))
