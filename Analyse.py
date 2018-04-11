@@ -414,8 +414,8 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
     if model == 'ANN':
         if len(kwargs.keys()):
             estimator = neural_network.MLPRegressor(
-                hidden_layer_sizes=([kwargs['nodes']] * kwargs['depth']),
-                solver='lbfgs', max_iter=kwargs['iters'],
+                hidden_layer_sizes=([kwargs['Nodes']] * kwargs['Depth']),
+                solver='lbfgs', max_iter=kwargs['Iterations'],
                 learning_rate_init=1e-3, learning_rate='adaptive')
         else:
             # parameter grid
@@ -437,7 +437,8 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
     elif model == 'GB':
         if len(kwargs.keys()):
             estimator = ensemble.GradientBoostingRegressor(
-                n_estimators=kwargs['est'], max_depth=kwargs['depth'], loss='lad')
+                n_estimators=kwargs['Estimators'], 
+                max_depth=kwargs['Depth'], loss='lad')
         else:
             # parameter grid
             params = {'n_estimators': [10, 25, 50, 75, 100, 125, 150],
@@ -448,6 +449,19 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
                 ensemble.GradientBoostingRegressor(loss='lad'),
                 params, scoring='neg_mean_squared_error', n_jobs=4)
 
+    elif model == 'SVM':
+        if len(kwargs.keys()):
+            estimator = svm.SVR(
+                C=kwargs['C'], kernel=kwargs['Kernel'], 
+                degree=kwargs['Degree'], epsilon=kwargs['Epsilon'])
+        else:
+            params = {'C':[100, 200, 400, 600, 800, 1000, 1250, 1500,
+                           1750, 2000, 2500, 3000, 3500, 4000, 5000],
+                      'degree':[2, 3, 4, 5, 6, 7],
+                      'kernel':['poly']}
+            estimator = GridSearchCV(
+                svm.SVR(), params, scoring='neg_mean_squared_error', n_jobs=4)
+
     # make into numpy arrays
     sets = [train_in, train_out, test_in, test_out]
     sets = map(lambda y: map(lambda x: x.values.T[0], y), sets)
@@ -456,10 +470,16 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
     estimator = make_pipeline(preprocessing.StandardScaler(), estimator)
     estimator.fit(sets[0], sets[1])
     pred_out = estimator.predict(sets[2])
-    pred_out = [min(80000, abs(pred)) for pred in pred_out]
+
+    # remove negative and very large predictions
+    pred_out = [(min(90000, abs(pred))) for pred in pred_out]
+
+    # print the model details
     if len(kwargs.keys()):
-        print 'Model : {}\n Estimators : {}\n Depth : {}\n Iterations : {}\n MSE : {}\n'.format(
-            model, kwargs['est'], kwargs['depth'], kwargs['iters'], mean_squared_error(pred_out, sets[3]))
+        print 'Model : {}'.format(model)
+        for key, value in kwargs.iteritems():
+            print ' {} : {}'.format(key, value)
+        print ' MSE : {}\n'.format(mean_squared_error(pred_out, sets[3]))
     else:
         estimator = estimator.named_steps['gridsearchcv']
         print 'Model : {}\n Grid Searched : \n {}\n MSE : {}'.format(
@@ -467,9 +487,10 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
 
     # plot the predicted and test out
     times = map(lambda x: x.name.date(), test_out)
-    plt.plot(times, sets[3], 'o', label='data')
-    plt.plot(times, pred_out, 'o', label='predicted')
-    plt.legend()
+    plt.plot(times, sets[3], 'o', label='Actual')
+    plt.plot(times, pred_out, 'o', label='Predicted')
+    plt.title('Daily Aggregate DNI - predicted vs actual')
+    plt.legend(loc='upper right')
     plt.show()
 
     return pred_out
@@ -501,8 +522,8 @@ def Run(args):
     # plot(measure_cols, Data_sum, '-')
 
     # make the dataset & dump
-    # createDataSets(Data_sum, 'date',
-    #                split=True, window=5, dump_dir='Dumped Data Date 5')
+    createDataSets(Data_sum, 'date',
+                   split=True, window=5, dump_dir='Dumped Data Date 5')
     train_in, train_out, test_in, test_out = loadDumpedData(
         'Dumped Data Date 5')
 
@@ -516,15 +537,21 @@ def Run(args):
     # crossValidateModel(train_in, train_out, 'ADA')
 
     # predict using various models
-    nn_args = {'depth': 2, 'nodes': 20, 'est': 20, 'iters': 100}
+    nn_args = {'Depth': 2, 'Nodes': 20, 'Iterations': 100}
     evaluateModel(train_in, train_out, test_in, test_out, 'ANN', **nn_args)
     evaluateModel(train_in, train_out, train_in + test_in, train_out + test_out, 'ANN', **nn_args)
     
-    gb_args = {'depth': 10, 'nodes': 100, 'est': 100, 'iters': 1}
+    gb_args = {'Depth': 10, 'Estimators': 100}
     evaluateModel(train_in, train_out, test_in, test_out, 'GB', **gb_args)
     evaluateModel(train_in, train_out, train_in + test_in, train_out + test_out, 'GB', **gb_args)
-    # evaluateModel(train_in, train_out, test_in, test_out, 'GB')
 
+    svm_args = {'C':500, 'Kernel':'linear', 'Degree': 1, 'Epsilon': 0.01}
+    evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args)
+    evaluateModel(train_in, train_out, train_in + test_in, train_out + test_out, 'SVM', **svm_args)
+
+    svm_args = {'C':1800, 'Kernel':'poly', 'Degree': 3, 'Epsilon': 0.01}
+    evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args)
+    evaluateModel(train_in, train_out, train_in + test_in, train_out + test_out, 'SVM', **svm_args)
 
 if __name__ == '__main__':
     args = vars(getParser().parse_args(sys.argv[1:]))
