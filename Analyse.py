@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+import itertools
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
@@ -9,7 +10,7 @@ import matplotlib.pyplot as plt
 from statsmodels.tsa.stattools import adfuller, acf, pacf
 from statsmodels.tsa import arima_model
 # sklearn models
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn import preprocessing, svm, tree, neural_network, ensemble, isotonic, gaussian_process
 from sklearn.metrics import mean_squared_error
@@ -404,21 +405,48 @@ def crossValidateModel(train_in, train_out, model='', n=5):
         model, abs(sum(scores)) / n, n)
 
 
-def evaluateModel(
-        train_in, train_out, test_in, test_out,
-        model='', iters=1, est=1, depth=10):
+def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
     '''
     Evaluate a model - plot on the testing set, as well as the Mean Squared Error
     '''
     # prepare the estimator
+    params = []
     if model == 'ANN':
-        estimator = neural_network.MLPRegressor(
-            hidden_layer_sizes=([est] * depth), solver='lbfgs',
-            learning_rate='adaptive', max_iter=iters)
+        if len(kwargs.keys()):
+            estimator = neural_network.MLPRegressor(
+                hidden_layer_sizes=([kwargs['nodes']] * kwargs['depth']),
+                solver='lbfgs', max_iter=kwargs['iters'],
+                learning_rate_init=1e-3, learning_rate='adaptive')
+        else:
+            # parameter grid
+            depths = [1, 2, 3, 4, 5]#, 6, 7, 8]
+            nodes = [1, 2, 5, 8, 10, 12, 15, 20, 25]#, 30, 40, 50]
+            hidden_layer_sizes_try = [[element[0]] * element[1]
+                                      for element in itertools.product(*[nodes, depths])]
+            params = {'max_iter': [1, 10, 100, 200],
+                      'hidden_layer_sizes': hidden_layer_sizes_try}
+
+            # grid search
+            estimator = GridSearchCV(
+                neural_network.MLPRegressor(
+                    solver='lbfgs',
+                    learning_rate_init=1e-3,
+                    learning_rate='adaptive'),
+                params, scoring='neg_mean_squared_error', n_jobs=4)
+
     elif model == 'GB':
-        estimator = ensemble.GradientBoostingRegressor(
-            n_estimators=est, learning_rate=0.1,
-            max_depth=depth, random_state=0, loss='lad')
+        if len(kwargs.keys()):
+            estimator = ensemble.GradientBoostingRegressor(
+                n_estimators=kwargs['est'], max_depth=kwargs['depth'], loss='lad')
+        else:
+            # parameter grid
+            params = {'n_estimators': [10, 25, 50, 75, 100, 125, 150],
+                      'max_depth': [1, 2, 3, 5, 7, 10, 12, 15, 17, 20]}
+
+            # grid search
+            estimator = GridSearchCV(
+                ensemble.GradientBoostingRegressor(loss='lad'),
+                params, scoring='neg_mean_squared_error', n_jobs=4)
 
     # make into numpy arrays
     sets = [train_in, train_out, test_in, test_out]
@@ -429,15 +457,20 @@ def evaluateModel(
     estimator.fit(sets[0], sets[1])
     pred_out = estimator.predict(sets[2])
     pred_out = [min(80000, abs(pred)) for pred in pred_out]
-    print 'Model : {}\n Estimators : {}\n Depth : {}\n Iterations : {}\n MSE : {}\n'.format(
-        model, est, depth, iters, mean_squared_error(pred_out, sets[3]))
+    if len(kwargs.keys()):
+        print 'Model : {}\n Estimators : {}\n Depth : {}\n Iterations : {}\n MSE : {}\n'.format(
+            model, kwargs['est'], kwargs['depth'], kwargs['iters'], mean_squared_error(pred_out, sets[3]))
+    else:
+        estimator = estimator.named_steps['gridsearchcv']
+        print 'Model : {}\n Grid Searched : \n {}\n MSE : {}'.format(
+            model, estimator.best_params_, -estimator.best_score_)
 
     # plot the predicted and test out
     times = map(lambda x: x.name.date(), test_out)
     plt.plot(times, sets[3], 'o', label='data')
     plt.plot(times, pred_out, 'o', label='predicted')
     plt.legend()
-    # plt.show()
+    plt.show()
 
     return pred_out
 
@@ -468,8 +501,8 @@ def Run(args):
     # plot(measure_cols, Data_sum, '-')
 
     # make the dataset & dump
-    createDataSets(Data_sum, 'date',
-                   split=True, window=5, dump_dir='Dumped Data Date 5')
+    # createDataSets(Data_sum, 'date',
+    #                split=True, window=5, dump_dir='Dumped Data Date 5')
     train_in, train_out, test_in, test_out = loadDumpedData(
         'Dumped Data Date 5')
 
@@ -483,8 +516,14 @@ def Run(args):
     # crossValidateModel(train_in, train_out, 'ADA')
 
     # predict using various models
-    # evaluateModel(train_in, train_out, test_in, test_out, 'ANN', 100, 20, 2)
-    # evaluateModel(train_in, train_out, test_in, test_out, 'GB', 100)
+    nn_args = {'depth': 2, 'nodes': 20, 'est': 20, 'iters': 100}
+    evaluateModel(train_in, train_out, test_in, test_out, 'ANN', **nn_args)
+    evaluateModel(train_in, train_out, train_in + test_in, train_out + test_out, 'ANN', **nn_args)
+    
+    gb_args = {'depth': 10, 'nodes': 100, 'est': 100, 'iters': 1}
+    evaluateModel(train_in, train_out, test_in, test_out, 'GB', **gb_args)
+    evaluateModel(train_in, train_out, train_in + test_in, train_out + test_out, 'GB', **gb_args)
+    # evaluateModel(train_in, train_out, test_in, test_out, 'GB')
 
 
 if __name__ == '__main__':
