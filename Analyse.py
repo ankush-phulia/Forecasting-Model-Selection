@@ -366,35 +366,35 @@ def loadDumpedData(data_dir='Dumped Data'):
     return train_in, train_out, test_in, test_out
 
 
-def crossValidateModel(train_in, train_out, model='', n=5):
+def crossValidateModel(train_in, train_out, model_name='', n=5):
     '''
     Run n-fold cross-validation for training data with various methods
     '''
     train_in = map(lambda x: x.values.T[0], train_in)
     train_out = map(lambda x: x.values.T[0], train_out)
-    if model == 'SVM':
+    if model_name == 'SVM':
         model = make_pipeline(preprocessing.StandardScaler(), svm.SVR())
-    elif model == 'ANN':
+    elif model_name == 'ANN':
         model = make_pipeline(
             preprocessing.StandardScaler(),
             neural_network.MLPRegressor(max_iter=1))
-    elif model == 'DT':
+    elif model_name == 'DT':
         model = make_pipeline(
             preprocessing.StandardScaler(),
             tree.DecisionTreeRegressor())
-    elif model == 'GTB':
+    elif model_name == 'GTB':
         model = make_pipeline(
             preprocessing.StandardScaler(),
             ensemble.GradientBoostingRegressor())
-    elif model == 'RF':
+    elif model_name == 'Random Forest':
         model = make_pipeline(
             preprocessing.StandardScaler(),
             ensemble.RandomForestRegressor())
-    elif model == 'ET':
+    elif model_name == 'Extra Trees':
         model = make_pipeline(
             preprocessing.StandardScaler(),
             ensemble.ExtraTreesRegressor())
-    elif model == 'ADA':
+    elif model_name == 'ADABoost':
         model = make_pipeline(
             preprocessing.StandardScaler(),
             ensemble.AdaBoostRegressor())
@@ -402,7 +402,7 @@ def crossValidateModel(train_in, train_out, model='', n=5):
     scores = cross_val_score(
         model, train_in, train_out, cv=n)
     print '{} averaged {} for {}-fold cross validation'.format(
-        model, abs(sum(scores)) / n, n)
+        model_name, (sum(scores)) / n, n)
 
 
 def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
@@ -434,7 +434,7 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
                     learning_rate='adaptive'),
                 params, scoring='neg_mean_squared_error', n_jobs=4)
 
-    elif model == 'GB':
+    elif model == 'GradientBoost':
         if len(kwargs.keys()):
             estimator = ensemble.GradientBoostingRegressor(
                 n_estimators=kwargs['Estimators'],
@@ -461,6 +461,49 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
                       'kernel': ['poly']}
             estimator = GridSearchCV(
                 svm.SVR(), params, scoring='neg_mean_squared_error', n_jobs=4)
+
+    elif model == 'ADABoost':
+        if len(kwargs.keys()):
+            estimator = ensemble.AdaBoostRegressor(
+                n_estimators=kwargs['Estimators'])
+        else:
+            # parameter grid
+            params = {'n_estimators': [10, 25, 50, 75, 100, 125, 150]}
+
+            # grid search
+            estimator = GridSearchCV(
+                ensemble.AdaBoostRegressor(),
+                params, scoring='neg_mean_squared_error', n_jobs=4)
+
+    elif model == 'Extra Trees':
+        if len(kwargs.keys()):
+            estimator = ensemble.ExtraTreesRegressor(
+                n_estimators=kwargs['Estimators'],
+                max_depth=kwargs['Depth'])
+        else:
+            # parameter grid
+            params = {'n_estimators': [25, 50, 75, 100, 125, 150, 175, 200],
+                      'max_depth': [10, 15, 20, 25, 30, 35, 40, 45, 50]}
+
+            # grid search
+            estimator = GridSearchCV(
+                ensemble.ExtraTreesRegressor(),
+                params, scoring='neg_mean_squared_error', n_jobs=4)
+
+    elif model == 'Random Forest':
+        if len(kwargs.keys()):
+            estimator = ensemble.RandomForestRegressor(
+                n_estimators=kwargs['Estimators'],
+                max_depth=kwargs['Depth'])
+        else:
+            # parameter grid
+            params = {'n_estimators': [25, 50, 75, 100, 125, 150, 175, 200],
+                      'max_depth': [10, 15, 20, 25, 30, 35, 40, 45, 50]}
+
+            # grid search
+            estimator = GridSearchCV(
+                ensemble.RandomForestRegressor(),
+                params, scoring='neg_mean_squared_error', n_jobs=4)
 
     # make into numpy arrays
     sets = [train_in, train_out, test_in, test_out]
@@ -491,7 +534,9 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
     plt.plot(times, pred_out, 'o', label='Predicted')
     plt.title('Daily Aggregate DNI - predicted vs actual using {}'.format(model))
     plt.legend(loc='upper right')
-    plt.show()
+    # plt.show()
+    plt.savefig('{}_{}.png'.format(model, len(test_in)))
+    plt.close()
 
     return pred_out
 
@@ -515,51 +560,68 @@ def Run(args):
     Data_sum = aggregateDf(Data, 'D', 'sum')
 
     # get correlation between the measure columns
-    print 'Correlation in {}'.format(measure_cols)
-    print Data_sum[measure_cols].corr(), '\n'
+    # print 'Correlation in {}'.format(measure_cols)
+    # print Data_sum[measure_cols].corr(), '\n'
 
     # plot Data
     # plot(measure_cols, Data_sum, '-')
 
     # make the dataset & dump
-    createDataSets(Data_sum, 'date',
-                   split=True, window=5, dump_dir='Dumped Data Date 5')
+    # createDataSets(Data_sum, 'date',
+    #                split=True, window=5, dump_dir='Dumped Data Date 5')
     train_in, train_out, test_in, test_out = loadDumpedData(
         'Dumped Data Date 5')
 
     # try out models
     # crossValidateModel(train_in, train_out, 'SVM')
     # crossValidateModel(train_in, train_out, 'ANN')
-    # crossValidateModel(train_in, train_out, 'DT')
     # crossValidateModel(train_in, train_out, 'GTB')
-    # crossValidateModel(train_in, train_out, 'RF')
-    # crossValidateModel(train_in, train_out, 'ET')
-    # crossValidateModel(train_in, train_out, 'ADA')
+    # crossValidateModel(train_in, train_out, 'DT')
+    # crossValidateModel(train_in, train_out, 'Random Forest')
+    # crossValidateModel(train_in, train_out, 'Extra Trees')
+    # crossValidateModel(train_in, train_out, 'ADABoost')
 
     # predict using various models
     nn_args = {'Depth': 2, 'Nodes': 20, 'Iterations': 100}
     evaluateModel(train_in, train_out, test_in, test_out, 'ANN', **nn_args)
     evaluateModel(
-        train_in,
-        train_out,
+        train_in, train_out,
         train_in + test_in,
         train_out + test_out,
         'ANN', **nn_args)
 
-    gb_args = {'Depth': 10, 'Estimators': 100}
-    evaluateModel(train_in, train_out, test_in, test_out, 'GB', **gb_args)
+    gb_args = {'Depth': 15, 'Estimators': 200}
     evaluateModel(
         train_in,
         train_out,
+        test_in,
+        test_out,
+        'GradientBoost',
+        **gb_args)
+    evaluateModel(
+        train_in, train_out,
         train_in + test_in,
         train_out + test_out,
-        'GB', **gb_args)
+        'GradientBoost', **gb_args)
+
+    gb_args = {'Depth': 10, 'Estimators': 200}
+    evaluateModel(
+        train_in,
+        train_out,
+        test_in,
+        test_out,
+        'GradientBoost',
+        **gb_args)
+    evaluateModel(
+        train_in, train_out,
+        train_in + test_in,
+        train_out + test_out,
+        'GradientBoost', **gb_args)
 
     svm_args = {'C': 500, 'Kernel': 'linear', 'Degree': 1, 'Epsilon': 0.01}
     evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args)
     evaluateModel(
-        train_in,
-        train_out,
+        train_in, train_out,
         train_in + test_in,
         train_out + test_out,
         'SVM', **svm_args)
@@ -567,11 +629,66 @@ def Run(args):
     svm_args = {'C': 1800, 'Kernel': 'poly', 'Degree': 3, 'Epsilon': 0.01}
     evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args)
     evaluateModel(
-        train_in,
-        train_out,
+        train_in, train_out,
         train_in + test_in,
         train_out + test_out,
         'SVM', **svm_args)
+
+    ada_args = {'Estimators': 100}
+    evaluateModel(
+        train_in,
+        train_out,
+        test_in,
+        test_out,
+        'ADABoost',
+        **ada_args)
+    evaluateModel(
+        train_in, train_out,
+        train_in + test_in,
+        train_out + test_out,
+        'ADABoost', **ada_args)
+
+    et_args = {'Depth': 10, 'Estimators': 200}
+    evaluateModel(
+        train_in,
+        train_out,
+        test_in,
+        test_out,
+        'Extra Trees',
+        **et_args)
+    evaluateModel(
+        train_in, train_out,
+        train_in + test_in,
+        train_out + test_out,
+        'Extra Trees', **et_args)
+
+    et_args = {'Depth': 20, 'Estimators': 100}
+    evaluateModel(
+        train_in,
+        train_out,
+        test_in,
+        test_out,
+        'Extra Trees',
+        **et_args)
+    evaluateModel(
+        train_in, train_out,
+        train_in + test_in,
+        train_out + test_out,
+        'Extra Trees', **et_args)
+
+    rf_args = {'Depth': 50, 'Estimators': 200}
+    evaluateModel(
+        train_in,
+        train_out,
+        test_in,
+        test_out,
+        'Random Forest',
+        **rf_args)
+    evaluateModel(
+        train_in, train_out,
+        train_in + test_in,
+        train_out + test_out,
+        'Random Forest', **rf_args)
 
 
 if __name__ == '__main__':
