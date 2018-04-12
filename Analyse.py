@@ -48,6 +48,11 @@ def getParser():
         type=int,
         default=0,
         help='Number of months to analyse')
+    parser.add_argument(
+        '--scale',
+        default='Daily',
+        help='Timescale to sum measurements - Daily or Hourly'
+        )
     return parser
 
 
@@ -232,17 +237,21 @@ def createDataSets(df, typ='continuous',
         # input is continuous data of 'window' days
         Input, Output = slidingWindow(
             df, window, input_measure_cols, output_measure_cols)
-
-    elif typ == 'date':
+    else:
         # input is data for a date of the past 'window' years
         Input, Output = [], []
-        for date, group in df.groupby([df.index.day, df.index.month]):
+        if typ == 'date':
+            group_cols = [df.index.day, df.index.month]
+        if typ == 'hour':
+            group_cols = [df.index.hour, df.index.day, df.index.month]
+
+        for date, group in df.groupby(group_cols):
             # for each date, iterate over the years
             i, o = slidingWindow(
                 group, window, input_measure_cols, output_measure_cols)
             Input += i
             Output += o
-
+       
     if not split:
         return Input, Output
 
@@ -405,7 +414,7 @@ def crossValidateModel(train_in, train_out, model_name='', n=5):
         model_name, (sum(scores)) / n, n)
 
 
-def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
+def evaluateModel(train_in, train_out, test_in, test_out, model, save=False, **kwargs):
     '''
     Evaluate a model - plot on the testing set, as well as the Mean Squared Error
     '''
@@ -513,16 +522,20 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
     estimator = make_pipeline(preprocessing.StandardScaler(), estimator)
     estimator.fit(sets[0], sets[1])
     pred_out = estimator.predict(sets[2])
+    pred_out_total = estimator.predict(sets[0] + sets[2])
 
     # remove negative and very large predictions
     pred_out = [(min(90000, abs(pred))) for pred in pred_out]
+    pred_out_total = [(min(90000, abs(pred))) for pred in pred_out_total]
 
     # print the model details
     if len(kwargs.keys()):
         print 'Model : {}'.format(model)
         for key, value in kwargs.iteritems():
             print ' {} : {}'.format(key, value)
-        print ' MSE : {}\n'.format(mean_squared_error(pred_out, sets[3]))
+        print ' MSE on Test Set: {}'.format(mean_squared_error(pred_out, sets[3]))
+        print ' MSE Overall: {}\n'.format(
+            mean_squared_error(pred_out_total, sets[1] + sets[3]))
     else:
         estimator = estimator.named_steps['gridsearchcv']
         print 'Model : {}\n Grid Searched : \n {}\n MSE : {}'.format(
@@ -530,15 +543,80 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, **kwargs):
 
     # plot the predicted and test out
     times = map(lambda x: x.name.date(), test_out)
-    plt.plot(times, sets[3], 'o', label='Actual')
-    plt.plot(times, pred_out, 'o', label='Predicted')
-    plt.title('Daily Aggregate DNI - predicted vs actual using {}'.format(model))
+    plt.plot(times, sets[3], 'o', label='Actual', markersize=3)
+    plt.plot(times, pred_out, 'o', label='Predicted', markersize=3)
+    plt.title('Aggregate DNI - predicted vs actual using {} on Test Set'.format(model))
     plt.legend(loc='upper right')
-    # plt.show()
-    plt.savefig('{}_{}.png'.format(model, len(test_in)))
-    plt.close()
+    plt.show()
+
+    times = map(lambda x: x.name.date(), train_out + test_out)
+    plt.plot(times, sets[1] + sets[3], 'o', label='Actual', markersize=3)
+    plt.plot(times, pred_out_total, 'o', label='Predicted', markersize=3)
+    plt.title('Aggregate DNI - predicted vs actual using {} Overall'.format(model))
+    plt.legend(loc='upper right')
+    plt.show()
+
+    # display/save the graphs
+    if save:
+        plt.savefig('{}_{}.png'.format(model, len(test_in)))
+        plt.close()
 
     return pred_out
+
+
+def runModels(train_in, train_out, test_in, test_out, scale):
+    '''
+    A collection of (relatively) tuned models for different time scales
+    '''
+    if scale == 'Daily':
+        nn_args = {'Depth': 2, 'Nodes': 20, 'Iterations': 100}
+        gb_args = {'Depth': 15, 'Estimators': 200}
+        gb_args2 = {'Depth': 10, 'Estimators': 200}
+        svm_args = {'C': 500, 'Kernel': 'linear', 'Degree': 1, 'Epsilon': 0.01}
+        svm_args2 = {'C': 1800, 'Kernel': 'poly', 'Degree': 3, 'Epsilon': 0.01}
+        ada_args = {'Estimators': 100}
+        et_args = {'Depth': 10, 'Estimators': 200}
+        et_args2 = {'Depth': 20, 'Estimators': 100}
+        rf_args = {'Depth': 50, 'Estimators': 200}
+
+    elif scale == 'Hourly':
+        # nn_args = {'Depth': 2, 'Nodes': 30, 'Iterations': 10000}
+        gb_args = {'Depth': 15, 'Estimators': 200}
+        gb_args2 = {'Depth': 10, 'Estimators': 200}
+        # svm_args = {'C': 500, 'Kernel': 'linear', 'Degree': 1, 'Epsilon': 0.01}
+        # svm_args2 = {'C': 1800, 'Kernel': 'poly', 'Degree': 3, 'Epsilon': 0.01}
+        # ada_args = {'Estimators': 100}
+        # et_args = {'Depth': 10, 'Estimators': 200}
+        # et_args2 = {'Depth': 20, 'Estimators': 100}
+        # rf_args = {'Depth': 50, 'Estimators': 200}
+
+    # evaluateModel(train_in, train_out, test_in, test_out, 'ANN', **nn_args)
+    
+    evaluateModel(
+        train_in, train_out, test_in, test_out,
+        'GradientBoost', **gb_args)   
+    evaluateModel(
+        train_in, train_out, test_in, test_out,
+        'GradientBoost', **gb_args2)
+    
+    # evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args)
+    # evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args2)
+    
+    # evaluateModel(
+    #     train_in, train_out, test_in, test_out,
+    #     'ADABoost', **ada_args)
+    
+    # evaluateModel(
+    #     train_in, train_out, test_in, test_out,
+    #     'Extra Trees', **et_args)   
+    # evaluateModel(
+    #     train_in, train_out, test_in, test_out,
+    #     'Extra Trees', **et_args2)
+
+    # evaluateModel(
+    #     train_in, train_out, test_in, test_out,
+    #     'Random Forest', **rf_args)
+
 
 
 def Run(args):
@@ -556,8 +634,28 @@ def Run(args):
     Data = pd.concat(dfs)
     measure_cols = ['GlobalHorizIrr(PSP)', 'DirNormIrr', 'DiffuseHorizIrr']
 
-    # take sum on a given time scale
-    Data_sum = aggregateDf(Data, 'D', 'sum')
+    scale = args['scale']
+    if scale == 'Daily':
+        # take sum on a given time scale
+        Data_sum = aggregateDf(Data, 'D', 'sum')
+
+        # make the dataset & dump
+        # createDataSets(Data_sum, 'hour',
+        #                split=True, window=5, dump_dir='Dumped Data Date 5')
+        train_in, train_out, test_in, test_out = loadDumpedData(
+            'Dumped Data Date 5')
+
+    elif scale == 'Hourly':
+        # take sum on a given time scale
+        Data_sum = aggregateDf(Data, 'h', 'sum')
+
+        # make the dataset & dump
+        # createDataSets(Data_sum, 'hour',
+        #                split=True, window=5, dump_dir='Dumped Data Hour 5')
+        train_in, train_out, test_in, test_out = loadDumpedData(
+            'Dumped Data Hour 5')
+
+    runModels(train_in, train_out, test_in, test_out, scale)
 
     # get correlation between the measure columns
     # print 'Correlation in {}'.format(measure_cols)
@@ -565,107 +663,6 @@ def Run(args):
 
     # plot Data
     # plot(measure_cols, Data_sum, '-')
-
-    # make the dataset & dump
-    # createDataSets(Data_sum, 'date',
-    #                split=True, window=5, dump_dir='Dumped Data Date 5')
-    train_in, train_out, test_in, test_out = loadDumpedData(
-        'Dumped Data Date 5')
-
-    # try out models
-    # crossValidateModel(train_in, train_out, 'SVM')
-    # crossValidateModel(train_in, train_out, 'ANN')
-    # crossValidateModel(train_in, train_out, 'GTB')
-    # crossValidateModel(train_in, train_out, 'DT')
-    # crossValidateModel(train_in, train_out, 'Random Forest')
-    # crossValidateModel(train_in, train_out, 'Extra Trees')
-    # crossValidateModel(train_in, train_out, 'ADABoost')
-
-    # predict using various models
-    nn_args = {'Depth': 2, 'Nodes': 20, 'Iterations': 100}
-    evaluateModel(train_in, train_out, test_in, test_out, 'ANN', **nn_args)
-    evaluateModel(
-        train_in, train_out,
-        train_in + test_in,
-        train_out + test_out,
-        'ANN', **nn_args)
-
-    gb_args = {'Depth': 15, 'Estimators': 200}
-    evaluateModel(
-        train_in, train_out, test_in, test_out,
-        'GradientBoost', **gb_args)
-    evaluateModel(
-        train_in, train_out,
-        train_in + test_in,
-        train_out + test_out,
-        'GradientBoost', **gb_args)
-
-    gb_args = {'Depth': 10, 'Estimators': 200}
-    evaluateModel(
-        train_in, train_out, test_in, test_out,
-        'GradientBoost', **gb_args)
-    evaluateModel(
-        train_in, train_out,
-        train_in + test_in,
-        train_out + test_out,
-        'GradientBoost', **gb_args)
-
-    svm_args = {'C': 500, 'Kernel': 'linear', 'Degree': 1, 'Epsilon': 0.01}
-    evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args)
-    evaluateModel(
-        train_in, train_out,
-        train_in + test_in,
-        train_out + test_out,
-        'SVM', **svm_args)
-
-    svm_args = {'C': 1800, 'Kernel': 'poly', 'Degree': 3, 'Epsilon': 0.01}
-    evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args)
-    evaluateModel(
-        train_in, train_out,
-        train_in + test_in,
-        train_out + test_out,
-        'SVM', **svm_args)
-
-    ada_args = {'Estimators': 100}
-    evaluateModel(
-        train_in, train_out, test_in, test_out,
-        'ADABoost', **ada_args)
-    evaluateModel(
-        train_in, train_out,
-        train_in + test_in,
-        train_out + test_out,
-        'ADABoost', **ada_args)
-
-    et_args = {'Depth': 10, 'Estimators': 200}
-    evaluateModel(
-        train_in, train_out, test_in, test_out,
-        'Extra Trees', **et_args)
-    evaluateModel(
-        train_in, train_out,
-        train_in + test_in,
-        train_out + test_out,
-        'Extra Trees', **et_args)
-
-    et_args = {'Depth': 20, 'Estimators': 100}
-    evaluateModel(
-        train_in, train_out, test_in, test_out,
-        'Extra Trees', **et_args)
-    evaluateModel(
-        train_in, train_out,
-        train_in + test_in,
-        train_out + test_out,
-        'Extra Trees', **et_args)
-
-    rf_args = {'Depth': 50, 'Estimators': 200}
-    evaluateModel(
-        train_in, train_out, test_in, test_out,
-        'Random Forest', **rf_args)
-    evaluateModel(
-        train_in, train_out,
-        train_in + test_in,
-        train_out + test_out,
-        'Random Forest', **rf_args)
-
 
 if __name__ == '__main__':
     args = vars(getParser().parse_args(sys.argv[1:]))
