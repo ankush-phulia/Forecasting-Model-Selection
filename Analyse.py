@@ -545,9 +545,12 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, save=False, **k
     times = map(lambda x: x.name.date(), test_out)
     plt.plot(times, sets[3], 'o', label='Actual', markersize=3)
     plt.plot(times, pred_out, 'o', label='Predicted', markersize=3)
-    plt.title('Aggregate DNI - predicted vs actual using {} on Test Set'.format(model))
+    plt.title('Hourly Aggregate DNI - predicted vs actual using {} on Test Set'.format(model))
     plt.legend(loc='upper right')
     plt.show()
+    if save:
+        plt.savefig('{}_{}.png'.format(model, len(test_in)))
+        plt.close()
 
     times = map(lambda x: x.name.date(), train_out + test_out)
     plt.plot(times, sets[1] + sets[3], 'o', label='Actual', markersize=3)
@@ -555,12 +558,10 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, save=False, **k
     plt.title('Aggregate DNI - predicted vs actual using {} Overall'.format(model))
     plt.legend(loc='upper right')
     plt.show()
-
-    # display/save the graphs
     if save:
-        plt.savefig('{}_{}.png'.format(model, len(test_in)))
+        plt.savefig('{}_{}.png'.format(model, len(train_in + test_in)))
         plt.close()
-
+    
     return pred_out
 
 
@@ -580,17 +581,17 @@ def runModels(train_in, train_out, test_in, test_out, scale):
         rf_args = {'Depth': 50, 'Estimators': 200}
 
     elif scale == 'Hourly':
-        # nn_args = {'Depth': 2, 'Nodes': 30, 'Iterations': 10000}
+        nn_args = {'Depth': 2, 'Nodes': 30, 'Iterations': 10000}
         gb_args = {'Depth': 15, 'Estimators': 200}
-        gb_args2 = {'Depth': 10, 'Estimators': 200}
-        # svm_args = {'C': 500, 'Kernel': 'linear', 'Degree': 1, 'Epsilon': 0.01}
-        # svm_args2 = {'C': 1800, 'Kernel': 'poly', 'Degree': 3, 'Epsilon': 0.01}
-        # ada_args = {'Estimators': 100}
-        # et_args = {'Depth': 10, 'Estimators': 200}
-        # et_args2 = {'Depth': 20, 'Estimators': 100}
-        # rf_args = {'Depth': 50, 'Estimators': 200}
+        gb_args2 = {'Depth': 25, 'Estimators': 100}
+        svm_args = {'C': 100, 'Kernel': 'linear', 'Degree': 1, 'Epsilon': 0.01}
+        svm_args2 = {'C': 1500, 'Kernel': 'poly', 'Degree': 2, 'Epsilon': 0.01}
+        svm_args2 = {'C': 200, 'Kernel': 'poly', 'Degree': 3, 'Epsilon': 0.01}
+        ada_args = {'Estimators': 150}
+        et_args = {'Depth': 20, 'Estimators': 200}
+        rf_args = {'Depth': 40, 'Estimators': 300}
 
-    # evaluateModel(train_in, train_out, test_in, test_out, 'ANN', **nn_args)
+    evaluateModel(train_in, train_out, test_in, test_out, 'ANN', **nn_args)
     
     evaluateModel(
         train_in, train_out, test_in, test_out,
@@ -599,24 +600,20 @@ def runModels(train_in, train_out, test_in, test_out, scale):
         train_in, train_out, test_in, test_out,
         'GradientBoost', **gb_args2)
     
-    # evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args)
-    # evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args2)
+    evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args)
+    evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args2)
     
-    # evaluateModel(
-    #     train_in, train_out, test_in, test_out,
-    #     'ADABoost', **ada_args)
+    evaluateModel(
+        train_in, train_out, test_in, test_out,
+        'ADABoost', **ada_args)
     
-    # evaluateModel(
-    #     train_in, train_out, test_in, test_out,
-    #     'Extra Trees', **et_args)   
-    # evaluateModel(
-    #     train_in, train_out, test_in, test_out,
-    #     'Extra Trees', **et_args2)
+    evaluateModel(
+        train_in, train_out, test_in, test_out,
+        'Extra Trees', **et_args)
 
-    # evaluateModel(
-    #     train_in, train_out, test_in, test_out,
-    #     'Random Forest', **rf_args)
-
+    evaluateModel(
+        train_in, train_out, test_in, test_out,
+        'Random Forest', **rf_args)
 
 
 def Run(args):
