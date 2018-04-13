@@ -52,7 +52,7 @@ def getParser():
         '--scale',
         default='Daily',
         help='Timescale to sum measurements - Daily or Hourly'
-        )
+    )
     return parser
 
 
@@ -251,7 +251,7 @@ def createDataSets(df, typ='continuous',
                 group, window, input_measure_cols, output_measure_cols)
             Input += i
             Output += o
-       
+
     if not split:
         return Input, Output
 
@@ -414,7 +414,8 @@ def crossValidateModel(train_in, train_out, model_name='', n=5):
         model_name, (sum(scores)) / n, n)
 
 
-def evaluateModel(train_in, train_out, test_in, test_out, model, save=False, **kwargs):
+def evaluateModel(train_in, train_out, test_in,
+                  test_out, model, save=True, **kwargs):
     '''
     Evaluate a model - plot on the testing set, as well as the Mean Squared Error
     '''
@@ -533,7 +534,8 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, save=False, **k
         print 'Model : {}'.format(model)
         for key, value in kwargs.iteritems():
             print ' {} : {}'.format(key, value)
-        print ' MSE on Test Set: {}'.format(mean_squared_error(pred_out, sets[3]))
+        print ' MSE on Test Set: {}'.format(
+            mean_squared_error(pred_out, sets[3]))
         print ' MSE Overall: {}\n'.format(
             mean_squared_error(pred_out_total, sets[1] + sets[3]))
     else:
@@ -541,13 +543,21 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, save=False, **k
         print 'Model : {}\n Grid Searched : \n {}\n MSE : {}'.format(
             model, estimator.best_params_, -estimator.best_score_)
 
+    # figure out the scale based on data spacing
+    temp = test_out[0].name
+    if temp.hour + temp.minute + temp.second == 0:
+        scale = 'Daily'
+    else:
+        scale = 'Hourly'
+
     # plot the predicted and test out
     times = map(lambda x: x.name.date(), test_out)
     plt.plot(times, sets[3], 'o', label='Actual', markersize=3)
     plt.plot(times, pred_out, 'o', label='Predicted', markersize=3)
-    plt.title('Hourly Aggregate DNI - predicted vs actual using {} on Test Set'.format(model))
+    plt.title(
+        '{} Agg. DNI - predicted vs actual using {} - Test Set'.format(scale, model))
     plt.legend(loc='upper right')
-    plt.show()
+    # plt.show()
     if save:
         plt.savefig('{}_{}.png'.format(model, len(test_in)))
         plt.close()
@@ -555,13 +565,14 @@ def evaluateModel(train_in, train_out, test_in, test_out, model, save=False, **k
     times = map(lambda x: x.name.date(), train_out + test_out)
     plt.plot(times, sets[1] + sets[3], 'o', label='Actual', markersize=3)
     plt.plot(times, pred_out_total, 'o', label='Predicted', markersize=3)
-    plt.title('Aggregate DNI - predicted vs actual using {} Overall'.format(model))
+    plt.title(
+        '{} Agg. DNI - predicted vs actual using {} - Overall'.format(scale, model))
     plt.legend(loc='upper right')
-    plt.show()
+    # plt.show()
     if save:
         plt.savefig('{}_{}.png'.format(model, len(train_in + test_in)))
         plt.close()
-    
+
     return pred_out
 
 
@@ -592,21 +603,21 @@ def runModels(train_in, train_out, test_in, test_out, scale):
         rf_args = {'Depth': 40, 'Estimators': 300}
 
     evaluateModel(train_in, train_out, test_in, test_out, 'ANN', **nn_args)
-    
+
     evaluateModel(
         train_in, train_out, test_in, test_out,
-        'GradientBoost', **gb_args)   
+        'GradientBoost', **gb_args)
     evaluateModel(
         train_in, train_out, test_in, test_out,
         'GradientBoost', **gb_args2)
-    
+
     evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args)
     evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args2)
-    
+
     evaluateModel(
         train_in, train_out, test_in, test_out,
         'ADABoost', **ada_args)
-    
+
     evaluateModel(
         train_in, train_out, test_in, test_out,
         'Extra Trees', **et_args)
@@ -640,7 +651,7 @@ def Run(args):
         # createDataSets(Data_sum, 'hour',
         #                split=True, window=5, dump_dir='Dumped Data Date 5')
         train_in, train_out, test_in, test_out = loadDumpedData(
-            'Dumped Data Date 5')
+            'Dumped Data Cont 30')
 
     elif scale == 'Hourly':
         # take sum on a given time scale
@@ -660,6 +671,7 @@ def Run(args):
 
     # plot Data
     # plot(measure_cols, Data_sum, '-')
+
 
 if __name__ == '__main__':
     args = vars(getParser().parse_args(sys.argv[1:]))
