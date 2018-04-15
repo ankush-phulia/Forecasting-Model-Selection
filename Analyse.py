@@ -225,8 +225,8 @@ def slidingWindow(df, window, imc, omc):
 
 
 def createDataSets(df, typ='continuous',
-                   input_measure_cols=['DirNormIrr'],
-                   input_flag_cols=['DNIFlag'],
+                   input_measure_cols=['DirNormIrr', 'GlobalHorizIrr(PSP)'],
+                   input_flag_cols=['DNIFlag', 'GHIFlag'],
                    output_measure_cols=['DirNormIrr'],
                    window=7, split_factor=0.2, split=True, dump_dir=''):
     '''
@@ -648,20 +648,20 @@ def Run(args):
         Data_sum = aggregateDf(Data, 'D', 'sum')
 
         # make the dataset & dump
-        # createDataSets(Data_sum, 'hour',
-        #                split=True, window=5, dump_dir='Dumped Data Date 5')
+        createDataSets(Data_sum, 'hour',
+                       split=True, window=5, dump_dir='Dumped Data Date GHI 5')
         train_in, train_out, test_in, test_out = loadDumpedData(
-            'Dumped Data Cont 30')
+            'Dumped Data Date GHI 5')
 
     elif scale == 'Hourly':
         # take sum on a given time scale
         Data_sum = aggregateDf(Data, 'h', 'sum')
 
         # make the dataset & dump
-        # createDataSets(Data_sum, 'hour',
-        #                split=True, window=5, dump_dir='Dumped Data Hour 5')
+        createDataSets(Data_sum, 'hour',
+                       split=True, window=5, dump_dir='Dumped Data Hour GHI 5')
         train_in, train_out, test_in, test_out = loadDumpedData(
-            'Dumped Data Hour 5')
+            'Dumped Data Hour GHI 5')
 
     runModels(train_in, train_out, test_in, test_out, scale)
 
