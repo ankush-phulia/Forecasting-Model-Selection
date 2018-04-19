@@ -107,7 +107,7 @@ def readData(data_dir, data="", years="", start_month=0, num_months=0):
     '''
     Read data from CSV files into DataFrame
     '''
-    # relevant column names for the site BS
+    # relevant column names for the site
     cols = ['Timestamp',
             'GlobalHorizIrr(PSP)', 'GHIFlag',
             'DirNormIrr', 'DNIFlag',
@@ -144,6 +144,7 @@ def readData(data_dir, data="", years="", start_month=0, num_months=0):
                     os.path.join(data_dir, f),
                     usecols=range(numTimeCols + len(measure_cols) * 2),
                     header=None, parse_dates=[[0, 1, 2, 3, 4]])
+
                 # rename columns and set index to time
                 df.columns = cols
                 df.set_index('Timestamp', inplace=True)
@@ -647,23 +648,23 @@ def Run(args):
         # take sum on a given time scale
         Data_sum = aggregateDf(Data, 'D', 'sum')
 
-        # make the dataset & dump
-        createDataSets(Data_sum, 'hour',
-                       split=True, window=5, dump_dir='Dumped Data Date GHI 5')
-        train_in, train_out, test_in, test_out = loadDumpedData(
-            'Dumped Data Date GHI 5')
+    #     # make the dataset & dump
+    #     createDataSets(Data_sum, 'hour',
+    #                    split=True, window=5, dump_dir='Dumped Dataset/Bluestate/Date GHI 5')
+    #     train_in, train_out, test_in, test_out = loadDumpedData(
+    #         'Dumped Dataset/Bluestate/Date GHI 5')
 
     elif scale == 'Hourly':
         # take sum on a given time scale
         Data_sum = aggregateDf(Data, 'h', 'sum')
 
-        # make the dataset & dump
-        createDataSets(Data_sum, 'hour',
-                       split=True, window=5, dump_dir='Dumped Data Hour GHI 5')
-        train_in, train_out, test_in, test_out = loadDumpedData(
-            'Dumped Data Hour GHI 5')
+    #     # make the dataset & dump
+    #     createDataSets(Data_sum, 'hour',
+    #                    split=True, window=5, dump_dir='Dumped Dataset/Bluestate/Hour GHI 5')
+    #     train_in, train_out, test_in, test_out = loadDumpedData(
+    #         'Dumped Dataset/Bluestate/Hour GHI 5')
 
-    runModels(train_in, train_out, test_in, test_out, scale)
+    # runModels(train_in, train_out, test_in, test_out, scale)
 
     # get correlation between the measure columns
     # print 'Correlation in {}'.format(measure_cols)
