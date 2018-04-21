@@ -667,11 +667,11 @@ def Run(args):
     # runModels(train_in, train_out, test_in, test_out, scale)
 
     # get correlation between the measure columns
-    # print 'Correlation in {}'.format(measure_cols)
-    # print Data_sum[measure_cols].corr(), '\n'
+    print 'Correlation in {}'.format(measure_cols)
+    print Data_sum[measure_cols].corr(), '\n'
 
     # plot Data
-    # plot(measure_cols, Data_sum, '-')
+    plot(measure_cols, Data_sum, '-')
 
 
 if __name__ == '__main__':
