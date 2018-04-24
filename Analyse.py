@@ -416,7 +416,7 @@ def crossValidateModel(train_in, train_out, model_name='', n=5):
 
 
 def evaluateModel(train_in, train_out, test_in,
-                  test_out, model, save=True, **kwargs):
+                  test_out, model, save=False, **kwargs):
     '''
     Evaluate a model - plot on the testing set, as well as the Mean Squared Error
     '''
@@ -527,8 +527,9 @@ def evaluateModel(train_in, train_out, test_in,
     pred_out_total = estimator.predict(sets[0] + sets[2])
 
     # remove negative and very large predictions
-    pred_out = [(min(90000, abs(pred))) for pred in pred_out]
-    pred_out_total = [(min(90000, abs(pred))) for pred in pred_out_total]
+    # pred_out = [(max(0, pred)) for pred in pred_out]
+    pred_out = [(min(75000, abs(pred))) for pred in pred_out]
+    pred_out_total = [(min(75000, abs(pred))) for pred in pred_out_total]
 
     # print the model details
     if len(kwargs.keys()):
@@ -651,8 +652,8 @@ def Run(args):
     #     # make the dataset & dump
     #     createDataSets(Data_sum, 'hour',
     #                    split=True, window=5, dump_dir='Dumped Dataset/Bluestate/Date GHI 5')
-    #     train_in, train_out, test_in, test_out = loadDumpedData(
-    #         'Dumped Dataset/Bluestate/Date GHI 5')
+        train_in, train_out, test_in, test_out = loadDumpedData(
+            'Dumped Dataset/Bluestate/Date GHI 5')
 
     elif scale == 'Hourly':
         # take sum on a given time scale
@@ -661,17 +662,17 @@ def Run(args):
     #     # make the dataset & dump
     #     createDataSets(Data_sum, 'hour',
     #                    split=True, window=5, dump_dir='Dumped Dataset/Bluestate/Hour GHI 5')
-    #     train_in, train_out, test_in, test_out = loadDumpedData(
-    #         'Dumped Dataset/Bluestate/Hour GHI 5')
+        train_in, train_out, test_in, test_out = loadDumpedData(
+            'Dumped Dataset/Bluestate/Hour GHI 5')
 
-    # runModels(train_in, train_out, test_in, test_out, scale)
+    runModels(train_in, train_out, test_in, test_out, scale)
 
     # get correlation between the measure columns
-    print 'Correlation in {}'.format(measure_cols)
-    print Data_sum[measure_cols].corr(), '\n'
+    # print 'Correlation in {}'.format(measure_cols)
+    # print Data_sum[measure_cols].corr(), '\n'
 
     # plot Data
-    plot(measure_cols, Data_sum, '-')
+    # plot(measure_cols, Data_sum, '-')
 
 
 if __name__ == '__main__':
