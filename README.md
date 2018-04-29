@@ -18,9 +18,13 @@ or
 
 
 
-Input parameters tried (graphs in the 'Graphs' folder) -
+### Input variations tried (graphs in the 'Graphs' folder) -
 
 * Predicting daily and hourly aggregate(summed) DNI based on past 5 years' DNI on the given date
 * Predicting daily aggregate DNI based on past 30 days' DNI
 * Predicting daily and hourly aggregate DNI based on past 5 years' DNI & GHI on the given date
 * Predicting daily aggregate DNI based on past 30 days' DNI & GHI
+
+
+### Data source
+Cooperative Networks For Renewable Resource Measurements Solar Energy Resource Data - http://rredc.nrel.gov/solar/new_data/confrrm/
