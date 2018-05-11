@@ -416,7 +416,8 @@ def crossValidateModel(train_in, train_out, model_name='', n=5):
 
 
 def evaluateModel(train_in, train_out, test_in,
-                  test_out, model, save=False, **kwargs):
+                  test_out, model, save_train=False, save_all=True,
+                  **kwargs):
     '''
     Evaluate a model - plot on the testing set, as well as the Mean Squared Error
     '''
@@ -464,7 +465,7 @@ def evaluateModel(train_in, train_out, test_in,
         if len(kwargs.keys()):
             estimator = svm.SVR(
                 C=kwargs['C'], kernel=kwargs['Kernel'],
-                degree=kwargs['Degree'], epsilon=kwargs['Epsilon'])
+                degree=kwargs['Depth'], epsilon=kwargs['Epsilon'])
         else:
             params = {'C': [100, 200, 400, 600, 800, 1000, 1250, 1500,
                             1750, 2000, 2500, 3000, 3500, 4000, 5000],
@@ -528,18 +529,18 @@ def evaluateModel(train_in, train_out, test_in,
 
     # remove negative and very large predictions
     # pred_out = [(max(0, pred)) for pred in pred_out]
-    pred_out = [(min(75000, abs(pred))) for pred in pred_out]
-    pred_out_total = [(min(75000, abs(pred))) for pred in pred_out_total]
+    pred_out = [(min(85000, abs(pred))) for pred in pred_out]
+    pred_out_total = [(min(85000, abs(pred))) for pred in pred_out_total]
+    mse_test = mean_squared_error(pred_out, sets[3])
+    mse_overall = mean_squared_error(pred_out_total, sets[1] + sets[3])
 
     # print the model details
     if len(kwargs.keys()):
         print 'Model : {}'.format(model)
         for key, value in kwargs.iteritems():
             print ' {} : {}'.format(key, value)
-        print ' MSE on Test Set: {}'.format(
-            mean_squared_error(pred_out, sets[3]))
-        print ' MSE Overall: {}\n'.format(
-            mean_squared_error(pred_out_total, sets[1] + sets[3]))
+        print ' MSE on Test Set: {}'.format(mse_test)
+        print ' MSE Overall: {}\n'.format(mse_overall)
     else:
         estimator = estimator.named_steps['gridsearchcv']
         print 'Model : {}\n Grid Searched : \n {}\n MSE : {}'.format(
@@ -556,24 +557,29 @@ def evaluateModel(train_in, train_out, test_in,
     times = map(lambda x: x.name.date(), test_out)
     plt.plot(times, sets[3], 'o', label='Actual', markersize=3)
     plt.plot(times, pred_out, 'o', label='Predicted', markersize=3)
+    plt.gca().set_ylabel('Agg. DNI')
+    plt.gca().set_xlabel('MSE = {}'.format(mse_test))
     plt.title(
         '{} Agg. DNI - predicted vs actual using {} - Test Set'.format(scale, model))
     plt.legend(loc='upper right')
     # plt.show()
-    if save:
-        plt.savefig('{}_{}.png'.format(model, len(test_in)))
-        plt.close()
+    if save_train:
+        plt.savefig('{}_{}_{}.png'.format(model, len(test_in), kwargs['Depth']))
+    plt.close()
 
     times = map(lambda x: x.name.date(), train_out + test_out)
     plt.plot(times, sets[1] + sets[3], 'o', label='Actual', markersize=3)
     plt.plot(times, pred_out_total, 'o', label='Predicted', markersize=3)
+    plt.gca().set_ylabel('Agg. DNI')
+    plt.gca().set_xlabel('MSE = {}'.format(mse_overall))
     plt.title(
         '{} Agg. DNI - predicted vs actual using {} - Overall'.format(scale, model))
     plt.legend(loc='upper right')
     # plt.show()
-    if save:
-        plt.savefig('{}_{}.png'.format(model, len(train_in + test_in)))
-        plt.close()
+    if save_all:
+        plt.savefig(
+            '{}_{}_{}.png'.format(model, len(train_in + test_in), kwargs['Depth']))
+    plt.close()
 
     return pred_out
 
@@ -583,26 +589,26 @@ def runModels(train_in, train_out, test_in, test_out, scale):
     A collection of (relatively) tuned models for different time scales
     '''
     if scale == 'Daily':
-        nn_args = {'Depth': 2, 'Nodes': 20, 'Iterations': 100}
-        gb_args = {'Depth': 15, 'Estimators': 200}
-        gb_args2 = {'Depth': 10, 'Estimators': 200}
-        svm_args = {'C': 500, 'Kernel': 'linear', 'Degree': 1, 'Epsilon': 0.01}
-        svm_args2 = {'C': 1800, 'Kernel': 'poly', 'Degree': 3, 'Epsilon': 0.01}
-        ada_args = {'Estimators': 100}
-        et_args = {'Depth': 10, 'Estimators': 200}
-        et_args2 = {'Depth': 20, 'Estimators': 100}
-        rf_args = {'Depth': 50, 'Estimators': 200}
+        nn_args =   {'Depth': 2, 'Nodes': 20, 'Iterations': 100}
+        gb_args =   {'Depth': 15, 'Estimators': 200}
+        gb_args2 =  {'Depth': 10, 'Estimators': 200}
+        svm_args =  {'Depth': 1, 'C': 500, 'Kernel': 'linear', 'Epsilon': 0.01}
+        svm_args2 = {'Depth': 3, 'C': 1800, 'Kernel': 'poly', 'Epsilon': 0.01}
+        ada_args =  {'Depth': 10, 'Estimators': 100}
+        et_args =   {'Depth': 10, 'Estimators': 200}
+        et_args2 =  {'Depth': 20, 'Estimators': 100}
+        rf_args =   {'Depth': 50, 'Estimators': 200}
 
     elif scale == 'Hourly':
-        nn_args = {'Depth': 2, 'Nodes': 30, 'Iterations': 10000}
-        gb_args = {'Depth': 15, 'Estimators': 200}
-        gb_args2 = {'Depth': 25, 'Estimators': 100}
-        svm_args = {'C': 100, 'Kernel': 'linear', 'Degree': 1, 'Epsilon': 0.01}
-        svm_args2 = {'C': 1500, 'Kernel': 'poly', 'Degree': 2, 'Epsilon': 0.01}
-        svm_args2 = {'C': 200, 'Kernel': 'poly', 'Degree': 3, 'Epsilon': 0.01}
-        ada_args = {'Estimators': 150}
-        et_args = {'Depth': 20, 'Estimators': 200}
-        rf_args = {'Depth': 40, 'Estimators': 300}
+        nn_args =   {'Depth': 2, 'Nodes': 30, 'Iterations': 10000}
+        gb_args =   {'Depth': 15, 'Estimators': 200}
+        gb_args2 =  {'Depth': 25, 'Estimators': 100}
+        svm_args =  {'Depth': 1, 'C': 100, 'Kernel': 'linear', 'Epsilon': 0.01}
+        # svm_args2 = {'C': 1500, 'Kernel': 'poly', 'Epsilon': 0.01}
+        svm_args2 = {'Depth': 3, 'C': 200, 'Kernel': 'poly', 'Epsilon': 0.01}
+        ada_args =  {'Depth': 10, 'Estimators': 150}
+        et_args =   {'Depth': 20, 'Estimators': 200}
+        rf_args =   {'Depth': 40, 'Estimators': 300}
 
     evaluateModel(train_in, train_out, test_in, test_out, 'ANN', **nn_args)
 
@@ -653,7 +659,7 @@ def Run(args):
     #     createDataSets(Data_sum, 'hour',
     #                    split=True, window=5, dump_dir='Dumped Dataset/Bluestate/Date GHI 5')
         train_in, train_out, test_in, test_out = loadDumpedData(
-            'Dumped Dataset/Bluestate/Date GHI 5')
+            'Dumped Dataset/Bluestate/Date 5')
 
     elif scale == 'Hourly':
         # take sum on a given time scale
@@ -663,7 +669,7 @@ def Run(args):
     #     createDataSets(Data_sum, 'hour',
     #                    split=True, window=5, dump_dir='Dumped Dataset/Bluestate/Hour GHI 5')
         train_in, train_out, test_in, test_out = loadDumpedData(
-            'Dumped Dataset/Bluestate/Hour GHI 5')
+            'Dumped Dataset/Bluestate/Hour 5')
 
     runModels(train_in, train_out, test_in, test_out, scale)
 
