@@ -1,14 +1,12 @@
-import os
-import sys
+import os, sys
 import argparse
 import itertools
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-# statistical models
-from statsmodels.tsa.stattools import adfuller, acf, pacf
-from statsmodels.tsa import arima_model
+import Stats
+import ReadData
 # sklearn models
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.pipeline import make_pipeline, Pipeline
@@ -86,91 +84,6 @@ def plot(col_names, df, combined=True):
 
     if combined:
         plt.show()
-
-
-def expandRange(data):
-    '''
-    Expects a string list of ranges/values - which are ints actually
-    Expands the strings which have '-' in them, to all values between them
-    '''
-    expanded = []
-    for data_item in data:
-        if '-' in data_item:
-            [start, end] = data_item.split('-')
-            expanded += [str(i) for i in xrange(int(start), int(end) + 1)]
-        else:
-            expanded.append(data_item)
-    return expanded
-
-
-def readData(data_dir, data="", years="", start_month=0, num_months=0):
-    '''
-    Read data from CSV files into DataFrame
-    '''
-    # relevant column names for the site
-    cols = ['Timestamp',
-            'GlobalHorizIrr(PSP)', 'GHIFlag',
-            'DirNormIrr', 'DNIFlag',
-            'DiffuseHorizIrr', 'DHIFlag']
-    measure_cols = [cols[i] for i in xrange(1, len(cols), 2)]
-    flag_cols = [cols[i] for i in xrange(2, len(cols), 2)]
-
-    # data is already in a file processed before
-    if len(data):
-        df = pd.read_csv(data, index_col=0)
-        df.index = pd.to_datetime(df.index)
-        return [df], measure_cols, flag_cols
-
-    # Data Formatting - allow specification of year ranges
-    years = sorted(expandRange(years))
-    start_month = max(0, start_month)
-    start_month = min(start_month, 12)
-
-    first_month_found = (len(years) == 0 or start_month == 0)
-    dfs = []
-
-    for f in os.listdir(data_dir):
-        # check if required number of months is found
-        if years and start_month and len(dfs) == num_months:
-            break
-
-        if f.endswith('.csv'):
-            if start_month == int(f[6:8]):
-                first_month_found = True
-
-            if first_month_found and (not(len(years)) or f[2:6] in years):
-                # make dataframe out of csv and append it
-                df = pd.read_csv(
-                    os.path.join(data_dir, f),
-                    usecols=range(numTimeCols + len(measure_cols) * 2),
-                    header=None, parse_dates=[[0, 1, 2, 3, 4]])
-
-                # rename columns and set index to time
-                df.columns = cols
-                df.set_index('Timestamp', inplace=True)
-                df.index = pd.to_datetime(df.index, format='%Y %m %d %H %M')
-                dfs.append(df)
-
-    return dfs, measure_cols, flag_cols
-
-
-def cleanupDf(df, measure_cols=[
-        'GlobalHorizIrr(PSP)',
-        'DirNormIrr',
-        'DiffuseHorizIrr'],
-        flag_cols=['GHIFlag', 'DNIFlag', 'DHIFlag'],
-        low_flag_bnd=2, up_flag_bnd=6):
-    '''
-    Remove entries with invalid flags and invalid columns
-    '''
-    # replace all bad flags with NaN - SERI_QC
-    for measure, flag in zip(measure_cols, flag_cols):
-        df.loc[df[flag] < low_flag_bnd, measure] = np.nan
-        df.loc[df[flag] > up_flag_bnd, measure] = np.nan
-        df.loc[df[measure] < 0, measure] = np.nan
-
-    # remove invalid rows - all NaNs
-    df.dropna(axis=0, how='all', subset=measure_cols, inplace=True)
 
 
 def aggregateDf(df, col, operation='avg',
@@ -272,92 +185,6 @@ def createDataSets(df, typ='continuous',
     if len(dump_dir):
         dumpSets(dump_dir,
                  train_in, train_out, test_in, test_out)
-
-
-def checkStationarity(df, measure_col, plot=False, silent=False):
-    '''
-    Using rolling stats and Dickey-Fuller to check stationarity
-    '''
-    ts = df[measure_col]
-
-    # Determing rolling statistics
-    rolmean = pd.rolling_mean(ts, window=12)
-    rolstd = pd.rolling_std(ts, window=12)
-
-    # Plot rolling statistics:
-    if plot:
-        orig = plt.plot(ts, label='Original')
-        mean = plt.plot(rolmean, label='Rolling Mean')
-        std = plt.plot(rolstd, label='Rolling Std')
-        plt.legend(loc='best')
-        plt.title('Rolling Mean & Standard Deviation for {}'.format(measure_col))
-        plt.show()
-
-    # Perform Dickey-Fuller test:
-    dftest = adfuller(ts, autolag='AIC')
-    dfoutput = pd.Series(
-        dftest[0:4], index=['Test Statistic', 'p-value', '#Lags Used', 'Number of Observations Used'])
-
-    # check test statistic vs critical values - get confidence
-    confidence = 0
-    for key, value in dftest[4].iteritems():
-        dfoutput['Critical Value ({})'.format(key)] = value
-        if dfoutput['Test Statistic'] < value:
-            confidence = max(confidence, 100 - int(key[:-1]))
-
-    # print the results
-    if not silent:
-        print 'Dicky Fuller for {} : '.format(measure_col)
-        print dfoutput, '\n'
-
-    return confidence
-
-
-def plotACF_PACF(df, measure_col):
-    '''
-    Plot the autocorrelation and partial autocorrelation plots
-    '''
-    ts = df[measure_col]
-    lag_acf = acf(ts, nlags=200)
-    lag_pacf = pacf(ts, method='ols', nlags=100)
-
-    # plot acf
-    plt.plot(lag_acf)
-    plt.axhline(y=0, linestyle='--', color='gray')
-    plt.axhline(y=-1.96 / np.sqrt(len(ts)), linestyle='--', color='gray')
-    plt.axhline(y=1.96 / np.sqrt(len(ts)), linestyle='--', color='gray')
-    plt.title('Autocorrelation Function for {}'.format(measure_col))
-    plt.show()
-
-    # plot pacf
-    plt.plot(lag_acf)
-    plt.axhline(y=0, linestyle='--', color='gray')
-    plt.axhline(y=-1.96 / np.sqrt(len(ts)), linestyle='--', color='gray')
-    plt.axhline(y=1.96 / np.sqrt(len(ts)), linestyle='--', color='gray')
-    plt.title('Partial Autocorrelation Function for {}'.format(measure_col))
-    plt.show()
-
-    # dislay autocorrelation plots
-    pd.tools.plotting.autocorrelation_plot(
-        df[measure_col], label=measure_col)
-    plt.title('Autocorrelation for {}'.format(measure_col))
-    plt.legend(loc='upper right')
-    plt.show()
-
-
-def statModel(df, measure_cols=['GlobalHorizIrr(PSP)']):
-    '''
-    Model Time series data with statistical models
-    '''
-    for col in measure_cols:
-        # checkStationarity(df, col)
-        # plotACF_PACF(df, col)
-        ts = df[col]
-        p, q, d = 80, 80, 0
-        model = arima_model.ARIMA(ts, order=(p, d, q)).fit()
-        plt.plot(ts)
-        plt.plot(model.fittedvalues, color='red')
-        plt.title('RSS : {}'.format(sum((model.fittedvalues - ts)**2)))
 
 
 def loadDumpedData(data_dir='Dumped Data'):
@@ -638,16 +465,7 @@ def runModels(train_in, train_out, test_in, test_out, scale):
 def Run(args):
     cid = plt.gcf().canvas.mpl_connect('key_press_event', closePlot)
 
-    # read data to make list of dataframes
-    dfs, measure_cols, flag_cols = readData(
-        args['data_dir'], args['data'], args['years'], args['start_month'], args['num_months'])
-
-    # clean-up for each one
-    for df in dfs:
-        cleanupDf(df, measure_cols, flag_cols)
-
-    # put them all together
-    Data = pd.concat(dfs)
+    Data = ReadData.Run(args)
     measure_cols = ['GlobalHorizIrr(PSP)', 'DirNormIrr', 'DiffuseHorizIrr']
 
     scale = args['scale']
