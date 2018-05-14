@@ -4,6 +4,10 @@ import argparse
 import numpy as np
 import pandas as pd
 
+# data specific info
+num_time_cols=5
+header_rows=0
+
 
 def getParser():
     parser = argparse.ArgumentParser(
@@ -93,8 +97,9 @@ def readData(data_dir, data="", years="", start_month=0, num_months=0):
                 # make dataframe out of csv and append it
                 df = pd.read_csv(
                     os.path.join(data_dir, f),
+                    skiprows=header_rows,
                     usecols=range(numTimeCols + len(measure_cols) * 2),
-                    header=None, parse_dates=[[0, 1, 2, 3, 4]])
+                    header=None, parse_dates=[range(num_time_cols)])
 
                 # rename columns and set index to time
                 df.columns = cols
