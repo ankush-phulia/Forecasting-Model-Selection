@@ -64,9 +64,9 @@ def readData(data_dir, data="", years="", start_month=0, num_months=0):
     '''
     # relevant column names for the site
     cols = ['Timestamp',
-            'GlobalHorizIrr(PSP)', 'GHIFlag',
-            'DirNormIrr', 'DNIFlag',
-            'DiffuseHorizIrr', 'DHIFlag']
+            'GHI', 'GHIFlag',
+            'DNI', 'DNIFlag',
+            'DHI', 'DHIFlag']
     measure_cols = [cols[i] for i in xrange(1, len(cols), 2)]
     flag_cols = [cols[i] for i in xrange(2, len(cols), 2)]
 
@@ -111,9 +111,9 @@ def readData(data_dir, data="", years="", start_month=0, num_months=0):
 
 
 def cleanupDf(df, measure_cols=[
-        'GlobalHorizIrr(PSP)',
-        'DirNormIrr',
-        'DiffuseHorizIrr'],
+        'GHI',
+        'DNI',
+        'DHI'],
         flag_cols=['GHIFlag', 'DNIFlag', 'DHIFlag'],
         low_flag_bnd=2, up_flag_bnd=6):
     '''

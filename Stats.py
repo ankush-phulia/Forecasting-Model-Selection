@@ -76,7 +76,7 @@ def plotACF_PACF(df, measure_col):
     plt.show()
 
 
-def statModel(df, measure_cols=['GlobalHorizIrr(PSP)']):
+def statModel(df, measure_cols=['GHI']):
     '''
     Model Time series data with statistical models
     '''

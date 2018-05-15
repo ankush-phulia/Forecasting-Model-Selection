@@ -5,10 +5,13 @@ from sklearn.model_selection import train_test_split
 
 
 def aggregateDf(df, col, operation='avg',
-                possible_cols=['Y', 'M', 'D', 'h', 'm']):
+                possible_cols=['Y', 'M', 'D', 'h']):
     '''
     Groups all the observations of df by the cols, and aggregates over that time span
     '''
+    # TODO - hack to handle hour
+    if col == 'H': col = 'h'
+
     if not(col in possible_cols):
         print 'Cant take aggregate on this column'
         return df, possible_cols
@@ -57,23 +60,22 @@ def slidingWindow(df, window, imc, omc):
 
 
 def createDataSets(df, typ='continuous',
-                   input_measure_cols=['DirNormIrr', 'GlobalHorizIrr(PSP)'],
-                   input_flag_cols=['DNIFlag', 'GHIFlag'],
-                   output_measure_cols=['DirNormIrr'],
+                   input_measure_cols=['DNI', 'GHI'],
+                   output_measure_cols=['DNI'],
                    window=7, split_factor=0.2, split=True, dump_dir=''):
     '''
     Create Data set and split into train/test, dump into file
     '''
-    if typ == 'cont':
+    if typ == 'Cont':
         # input is continuous data of 'window' days
         Input, Output = slidingWindow(
             df, window, input_measure_cols, output_measure_cols)
     else:
         # input is data for a date of the past 'window' years
         Input, Output = [], []
-        if typ == 'date':
+        if typ == 'Date':
             group_cols = [df.index.day, df.index.month]
-        if typ == 'hour':
+        if typ == 'Hour':
             group_cols = [df.index.hour, df.index.day, df.index.month]
 
         for date, group in df.groupby(group_cols):

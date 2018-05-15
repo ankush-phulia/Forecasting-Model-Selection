@@ -296,7 +296,7 @@ def runModels(train_in, train_out, test_in, test_out, scale):
     '''
     A collection of (relatively) tuned models for different time scales
     '''
-    if scale == 'Daily':
+    if scale == 'Date':
         nn_args =   {'Depth': 2, 'Nodes': 20, 'Iterations': 100}
         gb_args =   {'Depth': 15, 'Estimators': 200}
         gb_args2 =  {'Depth': 10, 'Estimators': 200}
@@ -307,7 +307,7 @@ def runModels(train_in, train_out, test_in, test_out, scale):
         et_args2 =  {'Depth': 20, 'Estimators': 100}
         rf_args =   {'Depth': 50, 'Estimators': 200}
 
-    elif scale == 'Hourly':
+    elif scale == 'Hour':
         nn_args =   {'Depth': 2, 'Nodes': 30, 'Iterations': 10000}
         gb_args =   {'Depth': 15, 'Estimators': 200}
         gb_args2 =  {'Depth': 25, 'Estimators': 100}
@@ -346,38 +346,36 @@ def runModels(train_in, train_out, test_in, test_out, scale):
 def Run(args):
     cid = plt.gcf().canvas.mpl_connect('key_press_event', closePlot)
 
+    # get the combined data - cleaned
     Data = ReadData.Run(args)
-    measure_cols = ['GlobalHorizIrr(PSP)', 'DirNormIrr', 'DiffuseHorizIrr']
+    measure_cols = ['DNI', 'GHI', 'DHI']
 
-    scale = args['scale']
-    if scale == 'Daily':
-        # take sum on a given time scale
-        Data_sum = PrepareData.aggregateDf(Data, 'D', 'sum')
+    # sort out the scale info
+    scale_map = {'Hourly':'Hour', 'Daily':'Date'}
+    scale = scale_map[args['scale']]
+    window = 5
 
-    #     # make the dataset & dump
-    #     createDataSets(Data_sum, 'hour',
-    #                    split=True, window=5, dump_dir='Dumped Dataset/Bluestate/Date GHI 5')
-        train_in, train_out, test_in, test_out = PrepareData.loadDumpedData(
-            'Dumped Dataset/Bluestate/Date 5')
+    # take sum on a given time scale
+    Data_sum = PrepareData.aggregateDf(Data, scale[0], 'sum')
 
-    elif scale == 'Hourly':
-        # take sum on a given time scale
-        Data_sum = PrepareData.aggregateDf(Data, 'h', 'sum')
+    # get correlation between the measure columns
+    print 'Correlation in {}'.format(measure_cols)
+    print Data_sum.corr(), '\n'
 
-    #     # make the dataset & dump
-    #     createDataSets(Data_sum, 'hour',
-    #                    split=True, window=5, dump_dir='Dumped Dataset/Bluestate/Hour GHI 5')
-        train_in, train_out, test_in, test_out = PrepareData.loadDumpedData(
-            'Dumped Dataset/Bluestate/Hour 5')
+    # plot Data
+    plot(['DNI'], Data_sum, '-')
+
+    # make the dataset & dump
+    # PrepareData.createDataSets(Data_sum, scale,
+    #                 input_measure_cols=['DNI'], output_measure_cols=['DNI'],
+    #                 split=True, window=window, 
+    #                 dump_dir='Dumped Dataset/Suny/{} {}'.format(scale, window))
+    train_in, train_out, test_in, test_out = PrepareData.loadDumpedData(
+        'Dumped Dataset/Suny/{} {}'.format(scale, window))
 
     runModels(train_in, train_out, test_in, test_out, scale)
 
-    # get correlation between the measure columns
-    # print 'Correlation in {}'.format(measure_cols)
-    # print Data_sum[measure_cols].corr(), '\n'
-
-    # plot Data
-    # plot(measure_cols, Data_sum, '-')
+    
 
 
 if __name__ == '__main__':
