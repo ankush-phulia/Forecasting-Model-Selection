@@ -1,6 +1,7 @@
 import os, sys
 import argparse
 import itertools
+import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -51,8 +52,7 @@ sunyParamsFactory = {
         ('Extra Trees', {'Depth': 20, 'Estimators': 100}),
         ('Extra Trees', {'Depth': 25, 'Estimators': 200}),
         ('Random Forest', {'Depth': 10, 'Estimators': 200}),
-        ('SVM', {'Depth': 1, 'C': 100, 'Kernel': 'linear', 'Epsilon': 0.1}),
-        ('SVM', {'Depth': 3, 'C': 40, 'Kernel': 'poly', 'Epsilon': 0.01}),
+        ('SVM', {'Depth': 1, 'C': 100, 'Kernel': 'linear', 'Epsilon': 0.01}),
         ]
 }
 
@@ -162,8 +162,7 @@ def crossValidateModel(train_in, train_out, model_name='', n=5):
 
 
 def evaluateModel(train_in, train_out, test_in,
-                  test_out, model, save_test=True, save_all=False,
-                  **kwargs):
+                  test_out, model, save_test=True, **kwargs):
     '''
     Evaluate a model - plot on the testing set, as well as the Mean Squared Error
     '''
@@ -271,23 +270,25 @@ def evaluateModel(train_in, train_out, test_in,
     estimator = make_pipeline(preprocessing.StandardScaler(), estimator)
     estimator.fit(sets[0], sets[1])
     pred_out = estimator.predict(sets[2])
-    pred_out_total = estimator.predict(sets[0] + sets[2])
 
-    # remove negative and very large predictions
-    # pred_out = [(min(85000, abs(pred))) for pred in pred_out]
-    # pred_out_total = [(min(85000, abs(pred))) for pred in pred_out_total]
-
-    # TODO - hack to shift prediction back
-    pred_out = pred_out[1:]
-    mse_test = mean_squared_error(pred_out, sets[3][:-1])
-    # mse_overall = mean_squared_error(pred_out_total, sets[1] + sets[3])
+    # Calculate Error metrics
+    # TODO - fix one-day shift
+    pred_out, sets[3] = pred_out[1:],sets[3][:-1]
+    diff = np.array(pred_out) - np.array(sets[3])
+    rmse_test = np.sqrt(diff.dot(diff) / len(diff))
+    rel_err = np.abs(diff) * 100.0 / np.array(sets[3])
 
     # print the model details
     if len(kwargs.keys()):
         print 'Model : {}'.format(model)
         for key, value in kwargs.iteritems():
             print ' {} : {}'.format(key, value)
-        print ' MSE on Test Set: {}\n'.format(mse_test)
+        print ' MSE on Test Set: {}'.format(rmse_test**2)
+        print ' RMSE on Test Set: {}'.format(rmse_test)
+        print ' Avg Error on Test Set: {}%'.format(sum(rel_err)/len(rel_err))
+        print ' Number of days < 5% error: {}'.format(sum(rel_err < 5.0))
+        print ' Number of days < 10% error: {}\n'.format(sum(rel_err < 10.0))
+
     else:
         estimator = estimator.named_steps['gridsearchcv']
         print 'Model : {}\n Grid Searched : \n {}\n MSE : {}'.format(
@@ -301,11 +302,11 @@ def evaluateModel(train_in, train_out, test_in,
         scale = 'Hourly'
 
     # plot the predicted and test out
-    times = map(lambda x: x.name.date(), test_out)
+    times = map(lambda x: x.name.date(), test_out)[:-1]
     plt.plot(times, sets[3], '-', label='Actual', markersize=3)
-    plt.plot(times[:-1], pred_out, '-', label='Predicted', markersize=3)
+    plt.plot(times, pred_out, '-', label='Predicted', markersize=3)
     plt.gca().set_ylabel('Agg. DNI')
-    plt.gca().set_xlabel('MSE = {}'.format(mse_test))
+    plt.gca().set_xlabel('RMSE = {}'.format(rmse_test))
     plt.title(
         '{} Agg. DNI - predicted vs actual using {} - Test Set'.format(scale, model))
     plt.legend(loc='upper right')
@@ -314,20 +315,6 @@ def evaluateModel(train_in, train_out, test_in,
         plt.savefig('{}_{}_{}.png'.format(
             model, len(test_in), kwargs['Depth']))
     plt.close()
-
-    # times = map(lambda x: x.name.date(), train_out + test_out)
-    # plt.plot(times, sets[1] + sets[3], 'o', label='Actual', markersize=3)
-    # plt.plot(times, pred_out_total, 'o', label='Predicted', markersize=3)
-    # plt.gca().set_ylabel('Agg. DNI')
-    # plt.gca().set_xlabel('MSE = {}'.format(mse_overall))
-    # plt.title(
-    #     '{} Agg. DNI - predicted vs actual using {} - Overall'.format(scale, model))
-    # plt.legend(loc='upper right')
-    # # plt.show()
-    # if save_all:
-    #     plt.savefig(
-    #         '{}_{}_{}.png'.format(model, len(train_in + test_in), kwargs['Depth']))
-    # plt.close()
 
     return pred_out
 
@@ -368,10 +355,10 @@ def Run(args):
     if not os.path.exists(dump_dir):
         os.makedirs(dump_dir)
 
-    # PrepareData.createDataSets(Data_sum, scale,
+    # PrepareData.createDataSets(Data_sum, 'Cont',
     #                 input_measure_cols=['DNI'], output_measure_cols=['DNI'],
     #                 split=True, window=window,
-    #                 dump_dir=)
+    #                 dump_dir=dump_dir)
     train_in, train_out, test_in, test_out = PrepareData.loadDumpedData(dump_dir)
 
     runModels(train_in, train_out, test_in, test_out,
