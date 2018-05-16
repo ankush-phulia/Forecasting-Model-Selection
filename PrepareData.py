@@ -46,7 +46,7 @@ def slidingWindow(df, window, imc, omc):
     '''
     Input, Output = [], []
     current_window = df[imc].iloc[0:window]
-    for index in xrange(window, df.shape[0] - 1):
+    for index in xrange(window, df.shape[0]):
         Input.append(current_window)
 
         # get new obs - this is output
@@ -62,7 +62,7 @@ def slidingWindow(df, window, imc, omc):
 def createDataSets(df, typ='continuous',
                    input_measure_cols=['DNI', 'GHI'],
                    output_measure_cols=['DNI'],
-                   window=7, split_factor=0.2, split=True, dump_dir=''):
+                   window=7, split=True, dump_dir=''):
     '''
     Create Data set and split into train/test, dump into file
     '''
@@ -89,8 +89,10 @@ def createDataSets(df, typ='continuous',
         return Input, Output
 
     # create training and testing sets
+    Input = sorted(Input, key=lambda x : x.index.values[0])
+    Output = sorted(Output, key=lambda x : x.name)
     train_in, test_in, train_out, test_out = train_test_split(
-        Input, Output, test_size=split_factor, shuffle=False)
+        Input, Output, test_size=365.0/len(Input), shuffle=False)
 
     # print information
     print 'Input  : Past {} days\' {}\nOutput : Current {}'.format(
@@ -104,6 +106,7 @@ def createDataSets(df, typ='continuous',
     if len(dump_dir):
         dumpSets(dump_dir,
                  train_in, train_out, test_in, test_out)
+    return train_in, train_out, test_in, test_out
 
 
 def loadDumpedData(data_dir='Dumped Data'):

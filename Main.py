@@ -17,6 +17,43 @@ import PrepareData
 # display setting
 pd.set_option('expand_frame_repr', False)
 
+# hyper-parameters for bluestate site
+blueStateParamsFactory = {
+    'Date': [
+        ('ANN', {'Depth': 2, 'Nodes': 20, 'Iterations': 100}),
+        ('GradientBoost', {'Depth': 15, 'Estimators': 200}),
+        ('GradientBoost', {'Depth': 10, 'Estimators': 200}),
+        ('SVM', {'Depth': 1, 'C': 500, 'Kernel': 'linear', 'Epsilon': 0.01}),
+        ('SVM', {'Depth': 3, 'C': 1800, 'Kernel': 'poly', 'Epsilon': 0.01}),
+        ('ADABoost', {'Depth': 10, 'Estimators': 100}),
+        ('Extra Trees', {'Depth': 10, 'Estimators': 200}),
+        ('Extra Trees', {'Depth': 20, 'Estimators': 100}),
+        ('Random Forest', {'Depth': 50, 'Estimators': 200})],
+    'Hour': [
+        ('ANN', {'Depth': 2, 'Nodes': 30, 'Iterations': 10000}),
+        ('GradientBoost', {'Depth': 15, 'Estimators': 200}),
+        ('GradientBoost', {'Depth': 25, 'Estimators': 100}),
+        ('SVM', {'Depth': 1, 'C': 100, 'Kernel': 'linear', 'Epsilon': 0.01}),
+        ('SVM', {'C': 1500, 'Kernel': 'poly', 'Epsilon': 0.01}),
+        ('SVM', {'Depth': 3, 'C': 200, 'Kernel': 'poly', 'Epsilon': 0.01}),
+        ('ADABoost', {'Depth': 10, 'Estimators': 150}),
+        ('Extra Trees', {'Depth': 20, 'Estimators': 200}),
+        ('Random Forest', {'Depth': 40, 'Estimators': 300})]
+}
+
+# hyper-parameters for bluestate site
+sunyParamsFactory = {
+    'Date': [
+        ('ANN', {'Depth': 2, 'Nodes': 20, 'Iterations': 100}),
+        ('GradientBoost', {'Depth': 15, 'Estimators': 200}),
+        ('GradientBoost', {'Depth': 10, 'Estimators': 200}),
+        ('SVM', {'Depth': 1, 'C': 500, 'Kernel': 'linear', 'Epsilon': 0.01}),
+        ('SVM', {'Depth': 3, 'C': 1800, 'Kernel': 'poly', 'Epsilon': 0.01}),
+        ('ADABoost', {'Depth': 10, 'Estimators': 100}),
+        ('Extra Trees', {'Depth': 10, 'Estimators': 200}),
+        ('Extra Trees', {'Depth': 20, 'Estimators': 100}),
+        ('Random Forest', {'Depth': 50, 'Estimators': 200})],
+}
 
 def getParser():
     parser = argparse.ArgumentParser(
@@ -124,7 +161,7 @@ def crossValidateModel(train_in, train_out, model_name='', n=5):
 
 
 def evaluateModel(train_in, train_out, test_in,
-                  test_out, model, save_train=False, save_all=True,
+                  test_out, model, save_test=True, save_all=False,
                   **kwargs):
     '''
     Evaluate a model - plot on the testing set, as well as the Mean Squared Error
@@ -236,7 +273,6 @@ def evaluateModel(train_in, train_out, test_in,
     pred_out_total = estimator.predict(sets[0] + sets[2])
 
     # remove negative and very large predictions
-    # pred_out = [(max(0, pred)) for pred in pred_out]
     pred_out = [(min(85000, abs(pred))) for pred in pred_out]
     pred_out_total = [(min(85000, abs(pred))) for pred in pred_out_total]
     mse_test = mean_squared_error(pred_out, sets[3])
@@ -263,16 +299,17 @@ def evaluateModel(train_in, train_out, test_in,
 
     # plot the predicted and test out
     times = map(lambda x: x.name.date(), test_out)
-    plt.plot(times, sets[3], 'o', label='Actual', markersize=3)
-    plt.plot(times, pred_out, 'o', label='Predicted', markersize=3)
+    plt.plot(times, sets[3], '-', label='Actual', markersize=3)
+    plt.plot(times, pred_out, '-', label='Predicted', markersize=3)
     plt.gca().set_ylabel('Agg. DNI')
     plt.gca().set_xlabel('MSE = {}'.format(mse_test))
     plt.title(
         '{} Agg. DNI - predicted vs actual using {} - Test Set'.format(scale, model))
     plt.legend(loc='upper right')
     # plt.show()
-    if save_train:
-        plt.savefig('{}_{}_{}.png'.format(model, len(test_in), kwargs['Depth']))
+    if save_test:
+        plt.savefig('{}_{}_{}.png'.format(
+            model, len(test_in), kwargs['Depth']))
     plt.close()
 
     times = map(lambda x: x.name.date(), train_out + test_out)
@@ -292,55 +329,13 @@ def evaluateModel(train_in, train_out, test_in,
     return pred_out
 
 
-def runModels(train_in, train_out, test_in, test_out, scale):
+def runModels(train_in, train_out, test_in, test_out, scale, paramsFactory):
     '''
     A collection of (relatively) tuned models for different time scales
     '''
-    if scale == 'Date':
-        nn_args =   {'Depth': 2, 'Nodes': 20, 'Iterations': 100}
-        gb_args =   {'Depth': 15, 'Estimators': 200}
-        gb_args2 =  {'Depth': 10, 'Estimators': 200}
-        svm_args =  {'Depth': 1, 'C': 500, 'Kernel': 'linear', 'Epsilon': 0.01}
-        svm_args2 = {'Depth': 3, 'C': 1800, 'Kernel': 'poly', 'Epsilon': 0.01}
-        ada_args =  {'Depth': 10, 'Estimators': 100}
-        et_args =   {'Depth': 10, 'Estimators': 200}
-        et_args2 =  {'Depth': 20, 'Estimators': 100}
-        rf_args =   {'Depth': 50, 'Estimators': 200}
-
-    elif scale == 'Hour':
-        nn_args =   {'Depth': 2, 'Nodes': 30, 'Iterations': 10000}
-        gb_args =   {'Depth': 15, 'Estimators': 200}
-        gb_args2 =  {'Depth': 25, 'Estimators': 100}
-        svm_args =  {'Depth': 1, 'C': 100, 'Kernel': 'linear', 'Epsilon': 0.01}
-        # svm_args2 = {'C': 1500, 'Kernel': 'poly', 'Epsilon': 0.01}
-        svm_args2 = {'Depth': 3, 'C': 200, 'Kernel': 'poly', 'Epsilon': 0.01}
-        ada_args =  {'Depth': 10, 'Estimators': 150}
-        et_args =   {'Depth': 20, 'Estimators': 200}
-        rf_args =   {'Depth': 40, 'Estimators': 300}
-
-    evaluateModel(train_in, train_out, test_in, test_out, 'ANN', **nn_args)
-
-    evaluateModel(
-        train_in, train_out, test_in, test_out,
-        'GradientBoost', **gb_args)
-    evaluateModel(
-        train_in, train_out, test_in, test_out,
-        'GradientBoost', **gb_args2)
-
-    evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args)
-    evaluateModel(train_in, train_out, test_in, test_out, 'SVM', **svm_args2)
-
-    evaluateModel(
-        train_in, train_out, test_in, test_out,
-        'ADABoost', **ada_args)
-
-    evaluateModel(
-        train_in, train_out, test_in, test_out,
-        'Extra Trees', **et_args)
-
-    evaluateModel(
-        train_in, train_out, test_in, test_out,
-        'Random Forest', **rf_args)
+    if scale in paramsFactory:
+        for (model, args) in paramsFactory[scale]:
+            evaluateModel(train_in, train_out, test_in, test_out, model, **args)
 
 
 def Run(args):
@@ -351,7 +346,7 @@ def Run(args):
     measure_cols = ['DNI', 'GHI', 'DHI']
 
     # sort out the scale info
-    scale_map = {'Hourly':'Hour', 'Daily':'Date'}
+    scale_map = {'Hourly': 'Hour', 'Daily': 'Date'}
     scale = scale_map[args['scale']]
     window = 5
 
@@ -363,19 +358,18 @@ def Run(args):
     print Data_sum.corr(), '\n'
 
     # plot Data
-    plot(['DNI'], Data_sum, '-')
+    # plot(['DNI'], Data_sum, '-')
 
     # make the dataset & dump
     # PrepareData.createDataSets(Data_sum, scale,
     #                 input_measure_cols=['DNI'], output_measure_cols=['DNI'],
-    #                 split=True, window=window, 
+    #                 split=True, window=window,
     #                 dump_dir='Dumped Dataset/Suny/{} {}'.format(scale, window))
     train_in, train_out, test_in, test_out = PrepareData.loadDumpedData(
         'Dumped Dataset/Suny/{} {}'.format(scale, window))
 
-    runModels(train_in, train_out, test_in, test_out, scale)
-
-    
+    runModels(train_in, train_out, test_in, test_out,
+              scale, blueStateParamsFactory)
 
 
 if __name__ == '__main__':
