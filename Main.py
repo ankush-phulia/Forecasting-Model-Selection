@@ -47,12 +47,13 @@ bluestateParamsFactory = {
 # hyper-parameters for bluestate site
 sunyParamsFactory = {
     'Date': [
-        ('ANN', {'Depth': 2, 'Nodes': 20, 'Iterations': 1000}),
+        ('ANN', {'Depth': 3, 'Nodes': 3, 'Iterations': 3000}),
+        ('ANN', {'Depth': 5, 'Nodes': 4, 'Iterations': 3000}),
         ('GradientBoost', {'Depth': 25, 'Estimators': 100}),
-        ('Extra Trees', {'Depth': 20, 'Estimators': 100}),
+        ('GradientBoost', {'Depth': 4, 'Estimators': 300}),
         ('Extra Trees', {'Depth': 25, 'Estimators': 200}),
-        ('Random Forest', {'Depth': 10, 'Estimators': 200}),
-        ('SVM', {'Depth': 1, 'C': 100, 'Kernel': 'linear', 'Epsilon': 0.01}),
+        ('Random Forest', {'Depth': 4, 'Estimators': 300}),
+        ('SVM', {'Depth': 1, 'C': 500, 'Kernel': 'linear', 'Epsilon': 0.01}),
         ]
 }
 
@@ -162,7 +163,7 @@ def crossValidateModel(train_in, train_out, model_name='', n=5):
 
 
 def evaluateModel(train_in, train_out, test_in,
-                  test_out, model, save_test=True, **kwargs):
+                  test_out, model, save_test=False, **kwargs):
     '''
     Evaluate a model - plot on the testing set, as well as the Mean Squared Error
     '''
