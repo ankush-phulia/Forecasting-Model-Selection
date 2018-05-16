@@ -29,14 +29,21 @@ def dumpSets(data_dir, train_in, train_out, test_in, test_out):
     '''
     Dump sets into files
     '''
+    train_dir = os.path.join(data_dir, 'Train/')
+    if not os.path.exists(train_dir):
+        os.makedirs(train_dir)
+    test_dir = os.path.join(data_dir, 'Test/')
+    if not os.path.exists(test_dir):
+        os.makedirs(test_dir)
+
     import pickle
-    with open(os.path.join(data_dir, 'Train/train_in.pkl'), 'wb') as f:
+    with open(os.path.join(train_dir, 'train_in.pkl'), 'wb') as f:
         pickle.dump(train_in, f)
-    with open(os.path.join(data_dir, 'Train/train_out.pkl'), 'wb') as f:
+    with open(os.path.join(train_dir, 'train_out.pkl'), 'wb') as f:
         pickle.dump(train_out, f)
-    with open(os.path.join(data_dir, 'Test/train_in.pkl'), 'wb') as f:
+    with open(os.path.join(test_dir, 'test_in.pkl'), 'wb') as f:
         pickle.dump(test_in, f)
-    with open(os.path.join(data_dir, 'Test/train_out.pkl'), 'wb') as f:
+    with open(os.path.join(test_dir, 'test_out.pkl'), 'wb') as f:
         pickle.dump(test_out, f)
 
 
@@ -118,8 +125,8 @@ def loadDumpedData(data_dir='Dumped Data'):
         train_in = pickle.load(f)
     with open(os.path.join(data_dir, 'Train/train_out.pkl')) as f:
         train_out = pickle.load(f)
-    with open(os.path.join(data_dir, 'Test/train_in.pkl')) as f:
+    with open(os.path.join(data_dir, 'Test/test_in.pkl')) as f:
         test_in = pickle.load(f)
-    with open(os.path.join(data_dir, 'Test/train_out.pkl')) as f:
+    with open(os.path.join(data_dir, 'Test/test_out.pkl')) as f:
         test_out = pickle.load(f)
     return train_in, train_out, test_in, test_out

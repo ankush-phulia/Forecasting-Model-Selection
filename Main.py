@@ -1,4 +1,4 @@
-import sys
+import os, sys
 import argparse
 import itertools
 import pandas as pd
@@ -18,7 +18,7 @@ import PrepareData
 pd.set_option('expand_frame_repr', False)
 
 # hyper-parameters for bluestate site
-blueStateParamsFactory = {
+bluestateParamsFactory = {
     'Date': [
         ('ANN', {'Depth': 2, 'Nodes': 20, 'Iterations': 100}),
         ('GradientBoost', {'Depth': 15, 'Estimators': 200}),
@@ -28,7 +28,8 @@ blueStateParamsFactory = {
         ('ADABoost', {'Depth': 10, 'Estimators': 100}),
         ('Extra Trees', {'Depth': 10, 'Estimators': 200}),
         ('Extra Trees', {'Depth': 20, 'Estimators': 100}),
-        ('Random Forest', {'Depth': 50, 'Estimators': 200})],
+        ('Random Forest', {'Depth': 50, 'Estimators': 200})
+        ],
     'Hour': [
         ('ANN', {'Depth': 2, 'Nodes': 30, 'Iterations': 10000}),
         ('GradientBoost', {'Depth': 15, 'Estimators': 200}),
@@ -38,21 +39,21 @@ blueStateParamsFactory = {
         ('SVM', {'Depth': 3, 'C': 200, 'Kernel': 'poly', 'Epsilon': 0.01}),
         ('ADABoost', {'Depth': 10, 'Estimators': 150}),
         ('Extra Trees', {'Depth': 20, 'Estimators': 200}),
-        ('Random Forest', {'Depth': 40, 'Estimators': 300})]
+        ('Random Forest', {'Depth': 40, 'Estimators': 300})
+        ]
 }
 
 # hyper-parameters for bluestate site
 sunyParamsFactory = {
     'Date': [
-        ('ANN', {'Depth': 2, 'Nodes': 20, 'Iterations': 100}),
-        ('GradientBoost', {'Depth': 15, 'Estimators': 200}),
-        ('GradientBoost', {'Depth': 10, 'Estimators': 200}),
-        ('SVM', {'Depth': 1, 'C': 500, 'Kernel': 'linear', 'Epsilon': 0.01}),
-        ('SVM', {'Depth': 3, 'C': 1800, 'Kernel': 'poly', 'Epsilon': 0.01}),
-        ('ADABoost', {'Depth': 10, 'Estimators': 100}),
-        ('Extra Trees', {'Depth': 10, 'Estimators': 200}),
+        ('ANN', {'Depth': 2, 'Nodes': 20, 'Iterations': 1000}),
+        ('GradientBoost', {'Depth': 25, 'Estimators': 100}),
         ('Extra Trees', {'Depth': 20, 'Estimators': 100}),
-        ('Random Forest', {'Depth': 50, 'Estimators': 200})],
+        ('Extra Trees', {'Depth': 25, 'Estimators': 200}),
+        ('Random Forest', {'Depth': 10, 'Estimators': 200}),
+        ('SVM', {'Depth': 1, 'C': 100, 'Kernel': 'linear', 'Epsilon': 0.1}),
+        ('SVM', {'Depth': 3, 'C': 40, 'Kernel': 'poly', 'Epsilon': 0.01}),
+        ]
 }
 
 def getParser():
@@ -273,18 +274,20 @@ def evaluateModel(train_in, train_out, test_in,
     pred_out_total = estimator.predict(sets[0] + sets[2])
 
     # remove negative and very large predictions
-    pred_out = [(min(85000, abs(pred))) for pred in pred_out]
-    pred_out_total = [(min(85000, abs(pred))) for pred in pred_out_total]
-    mse_test = mean_squared_error(pred_out, sets[3])
-    mse_overall = mean_squared_error(pred_out_total, sets[1] + sets[3])
+    # pred_out = [(min(85000, abs(pred))) for pred in pred_out]
+    # pred_out_total = [(min(85000, abs(pred))) for pred in pred_out_total]
+
+    # TODO - hack to shift prediction back
+    pred_out = pred_out[1:]
+    mse_test = mean_squared_error(pred_out, sets[3][:-1])
+    # mse_overall = mean_squared_error(pred_out_total, sets[1] + sets[3])
 
     # print the model details
     if len(kwargs.keys()):
         print 'Model : {}'.format(model)
         for key, value in kwargs.iteritems():
             print ' {} : {}'.format(key, value)
-        print ' MSE on Test Set: {}'.format(mse_test)
-        print ' MSE Overall: {}\n'.format(mse_overall)
+        print ' MSE on Test Set: {}\n'.format(mse_test)
     else:
         estimator = estimator.named_steps['gridsearchcv']
         print 'Model : {}\n Grid Searched : \n {}\n MSE : {}'.format(
@@ -300,7 +303,7 @@ def evaluateModel(train_in, train_out, test_in,
     # plot the predicted and test out
     times = map(lambda x: x.name.date(), test_out)
     plt.plot(times, sets[3], '-', label='Actual', markersize=3)
-    plt.plot(times, pred_out, '-', label='Predicted', markersize=3)
+    plt.plot(times[:-1], pred_out, '-', label='Predicted', markersize=3)
     plt.gca().set_ylabel('Agg. DNI')
     plt.gca().set_xlabel('MSE = {}'.format(mse_test))
     plt.title(
@@ -312,26 +315,26 @@ def evaluateModel(train_in, train_out, test_in,
             model, len(test_in), kwargs['Depth']))
     plt.close()
 
-    times = map(lambda x: x.name.date(), train_out + test_out)
-    plt.plot(times, sets[1] + sets[3], 'o', label='Actual', markersize=3)
-    plt.plot(times, pred_out_total, 'o', label='Predicted', markersize=3)
-    plt.gca().set_ylabel('Agg. DNI')
-    plt.gca().set_xlabel('MSE = {}'.format(mse_overall))
-    plt.title(
-        '{} Agg. DNI - predicted vs actual using {} - Overall'.format(scale, model))
-    plt.legend(loc='upper right')
-    # plt.show()
-    if save_all:
-        plt.savefig(
-            '{}_{}_{}.png'.format(model, len(train_in + test_in), kwargs['Depth']))
-    plt.close()
+    # times = map(lambda x: x.name.date(), train_out + test_out)
+    # plt.plot(times, sets[1] + sets[3], 'o', label='Actual', markersize=3)
+    # plt.plot(times, pred_out_total, 'o', label='Predicted', markersize=3)
+    # plt.gca().set_ylabel('Agg. DNI')
+    # plt.gca().set_xlabel('MSE = {}'.format(mse_overall))
+    # plt.title(
+    #     '{} Agg. DNI - predicted vs actual using {} - Overall'.format(scale, model))
+    # plt.legend(loc='upper right')
+    # # plt.show()
+    # if save_all:
+    #     plt.savefig(
+    #         '{}_{}_{}.png'.format(model, len(train_in + test_in), kwargs['Depth']))
+    # plt.close()
 
     return pred_out
 
 
 def runModels(train_in, train_out, test_in, test_out, scale, paramsFactory):
     '''
-    A collection of (relatively) tuned models for different time scales
+    Get Parameter Factory and run all the models
     '''
     if scale in paramsFactory:
         for (model, args) in paramsFactory[scale]:
@@ -348,7 +351,7 @@ def Run(args):
     # sort out the scale info
     scale_map = {'Hourly': 'Hour', 'Daily': 'Date'}
     scale = scale_map[args['scale']]
-    window = 5
+    window = 30
 
     # take sum on a given time scale
     Data_sum = PrepareData.aggregateDf(Data, scale[0], 'sum')
@@ -361,15 +364,18 @@ def Run(args):
     # plot(['DNI'], Data_sum, '-')
 
     # make the dataset & dump
+    dump_dir = 'Dumped Dataset/Suny/{} {}'.format('Cont', window)
+    if not os.path.exists(dump_dir):
+        os.makedirs(dump_dir)
+
     # PrepareData.createDataSets(Data_sum, scale,
     #                 input_measure_cols=['DNI'], output_measure_cols=['DNI'],
     #                 split=True, window=window,
-    #                 dump_dir='Dumped Dataset/Suny/{} {}'.format(scale, window))
-    train_in, train_out, test_in, test_out = PrepareData.loadDumpedData(
-        'Dumped Dataset/Suny/{} {}'.format(scale, window))
+    #                 dump_dir=)
+    train_in, train_out, test_in, test_out = PrepareData.loadDumpedData(dump_dir)
 
     runModels(train_in, train_out, test_in, test_out,
-              scale, blueStateParamsFactory)
+              scale, sunyParamsFactory)
 
 
 if __name__ == '__main__':
