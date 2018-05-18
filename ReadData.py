@@ -11,7 +11,7 @@ header_rows=0
 
 def getParser():
     parser = argparse.ArgumentParser(
-        description='Analyse Time Series Data')
+        description='Read Data')
     parser.add_argument(
         '--data_dir',
         help='Directory with csv data files')

@@ -1,0 +1,24 @@
+{
+    "Date": [
+        ["ANN", {"Depth": 2, "Nodes": 20, "Iterations": 100}],
+        ["GradientBoost", {"Depth": 15, "Estimators": 200}],
+        ["GradientBoost", {"Depth": 10, "Estimators": 200}], 
+        ["SVM", {"Kernel": "linear", "Depth": 1, "C": 500, "Epsilon": 0.01}], 
+        ["SVM", {"Kernel": "poly", "Depth": 3, "C": 1800, "Epsilon": 0.01}], 
+        ["ADABoost", {"Depth": 10, "Estimators": 100}], 
+        ["Extra Trees", {"Depth": 10, "Estimators": 200}], 
+        ["Extra Trees", {"Depth": 20, "Estimators": 100}], 
+        ["Random Forest", {"Depth": 50, "Estimators": 200}]
+    ], 
+    "Hour": [
+        ["ANN", {"Depth": 2, "Nodes": 30, "Iterations": 10000}], 
+        ["GradientBoost", {"Depth": 15, "Estimators": 200}], 
+        ["GradientBoost", {"Depth": 25, "Estimators": 100}], 
+        ["SVM", {"Kernel": "linear", "Depth": 1, "C": 100, "Epsilon": 0.01}], 
+        ["SVM", {"Kernel": "poly", "C": 1500, "Epsilon": 0.01}], 
+        ["SVM", {"Kernel": "poly", "Depth": 3, "C": 200, "Epsilon": 0.01}], 
+        ["ADABoost", {"Depth": 10, "Estimators": 150}], 
+        ["Extra Trees", {"Depth": 20, "Estimators": 200}], 
+        ["Random Forest", {"Depth": 40, "Estimators": 300}]
+    ]
+}

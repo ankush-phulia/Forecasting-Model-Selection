@@ -1,0 +1,1 @@
+{"Date": [["ANN", {"Depth": 3, "Nodes": 3, "Iterations": 3000}], ["ANN", {"Depth": 5, "Nodes": 4, "Iterations": 3000}], ["GradientBoost", {"Depth": 25, "Estimators": 100}], ["GradientBoost", {"Depth": 4, "Estimators": 300}], ["Extra Trees", {"Depth": 25, "Estimators": 200}], ["Random Forest", {"Depth": 4, "Estimators": 300}]]}

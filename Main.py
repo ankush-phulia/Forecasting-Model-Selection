@@ -1,4 +1,5 @@
 import os, sys
+import json
 import argparse
 import itertools
 import numpy as np
@@ -18,48 +19,14 @@ import PrepareData
 # display setting
 pd.set_option('expand_frame_repr', False)
 
-# hyper-parameters for bluestate site
-bluestateParamsFactory = {
-    'Date': [
-        ('ANN', {'Depth': 2, 'Nodes': 20, 'Iterations': 100}),
-        ('GradientBoost', {'Depth': 15, 'Estimators': 200}),
-        ('GradientBoost', {'Depth': 10, 'Estimators': 200}),
-        ('SVM', {'Depth': 1, 'C': 500, 'Kernel': 'linear', 'Epsilon': 0.01}),
-        ('SVM', {'Depth': 3, 'C': 1800, 'Kernel': 'poly', 'Epsilon': 0.01}),
-        ('ADABoost', {'Depth': 10, 'Estimators': 100}),
-        ('Extra Trees', {'Depth': 10, 'Estimators': 200}),
-        ('Extra Trees', {'Depth': 20, 'Estimators': 100}),
-        ('Random Forest', {'Depth': 50, 'Estimators': 200})
-        ],
-    'Hour': [
-        ('ANN', {'Depth': 2, 'Nodes': 30, 'Iterations': 10000}),
-        ('GradientBoost', {'Depth': 15, 'Estimators': 200}),
-        ('GradientBoost', {'Depth': 25, 'Estimators': 100}),
-        ('SVM', {'Depth': 1, 'C': 100, 'Kernel': 'linear', 'Epsilon': 0.01}),
-        ('SVM', {'C': 1500, 'Kernel': 'poly', 'Epsilon': 0.01}),
-        ('SVM', {'Depth': 3, 'C': 200, 'Kernel': 'poly', 'Epsilon': 0.01}),
-        ('ADABoost', {'Depth': 10, 'Estimators': 150}),
-        ('Extra Trees', {'Depth': 20, 'Estimators': 200}),
-        ('Random Forest', {'Depth': 40, 'Estimators': 300})
-        ]
-}
-
-# hyper-parameters for bluestate site
-sunyParamsFactory = {
-    'Date': [
-        ('ANN', {'Depth': 3, 'Nodes': 3, 'Iterations': 3000}),
-        ('ANN', {'Depth': 5, 'Nodes': 4, 'Iterations': 3000}),
-        ('GradientBoost', {'Depth': 25, 'Estimators': 100}),
-        ('GradientBoost', {'Depth': 4, 'Estimators': 300}),
-        ('Extra Trees', {'Depth': 25, 'Estimators': 200}),
-        ('Random Forest', {'Depth': 4, 'Estimators': 300}),
-        ('SVM', {'Depth': 1, 'C': 500, 'Kernel': 'linear', 'Epsilon': 0.01}),
-        ]
-}
 
 def getParser():
     parser = argparse.ArgumentParser(
         description='Analyse Time Series Data')
+    # parser.add_argument(
+    #     '--site',
+    #     required=True,
+    #     help='Site for which model should be run')
     parser.add_argument(
         '--data_dir',
         help='Directory with csv data files')
@@ -353,6 +320,7 @@ def Run(args):
 
     # make the dataset & dump
     dump_dir = 'Dumped Dataset/Suny/{} {}'.format('Cont', window)
+    site = dump_dir.split('/')[1].lower()
     if not os.path.exists(dump_dir):
         os.makedirs(dump_dir)
 
@@ -362,8 +330,9 @@ def Run(args):
     #                 dump_dir=dump_dir)
     train_in, train_out, test_in, test_out = PrepareData.loadDumpedData(dump_dir)
 
-    runModels(train_in, train_out, test_in, test_out,
-              scale, sunyParamsFactory)
+    with open(os.path.join('Params', '{}.json'.format(site))) as paramsF:
+        paramsFactory = json.load(paramsF)
+        runModels(train_in, train_out, test_in, test_out, scale, paramsFactory)
 
 
 if __name__ == '__main__':
