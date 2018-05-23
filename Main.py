@@ -254,6 +254,7 @@ def evaluateModel(train_in, train_out, test_in,
         print ' MSE on Test Set: {}'.format(rmse_test**2)
         print ' RMSE on Test Set: {}'.format(rmse_test)
         print ' Avg Error on Test Set: {}%'.format(sum(rel_err)/len(rel_err))
+        # print ' Correlation Coefficient (R): {}'.format(np.corrcoef(pred_out, sets[3])[0][1])
         print ' Number of days < 5% error: {}'.format(sum(rel_err < 5.0))
         print ' Number of days < 10% error: {}\n'.format(sum(rel_err < 10.0))
 
@@ -324,10 +325,10 @@ def Run(args):
     if not os.path.exists(dump_dir):
         os.makedirs(dump_dir)
 
-    # PrepareData.createDataSets(Data_sum, 'Cont',
-    #                 input_measure_cols=['DNI'], output_measure_cols=['DNI'],
-    #                 split=True, window=window,
-    #                 dump_dir=dump_dir)
+    PrepareData.createDataSets(Data_sum, 'Cont',
+                    input_measure_cols=['DNI'], output_measure_cols=['DNI'],
+                    split=True, window=window,
+                    dump_dir=dump_dir)
     train_in, train_out, test_in, test_out = PrepareData.loadDumpedData(dump_dir)
 
     with open(os.path.join('Params', '{}.json'.format(site))) as paramsF:
