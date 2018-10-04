@@ -1,4 +1,4 @@
-# Forecasting-Model-Selection
+# Model Selection for Forecasting
 
 Forecasting daily aggregate and hourly Direct Normal(DNI) using various methods.
 
@@ -7,14 +7,20 @@ Course project for ASL 760 - Renewable Energy Meteorology
 Data is expected to be from one site, and in csv format
 
 ### Running
-    python Analyse.py --data_dir <Data Folder>
+```bash
+python Analyse.py --data_dir <Data Folder>
+```
 
 or
     
-    python Analyse.py --data <csv file with proper headers and timestamp>
+```bash
+python Analyse.py --data <csv file with proper headers and timestamp>
+```
 
 ### For options
-    python Analyse.py -h
+```bash
+python Analyse.py -h
+```
 
 
 
